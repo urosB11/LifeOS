@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn==0.30.6",
     "sqlalchemy==2.0.36",
     "alembic==1.14.0",
+    "tzdata==2025.2",
 ]
 
 [project.optional-dependencies]

@@ -45,9 +45,9 @@ class TaskRepository:
 
     def count_overdue(self) -> int:
         """Tareas pendientes con due_date anterior a la fecha local actual."""
-        from datetime import date
+        from app.core.clock import local_today
 
-        today = date.today().isoformat()
+        today = local_today(self.db).isoformat()
         stmt = select(func.count(Task.id)).where(
             and_(
                 Task.status == "pending",
