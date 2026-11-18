@@ -141,17 +141,48 @@ def main():
 
         status, body = http("GET", "/api/v1/dashboard/widgets")
         widgets = json.loads(body) if status == 200 else []
-        check("dashboard: 4 widgets", status == 200 and len(widgets) == 4, str(len(widgets)))
+        check("dashboard: 6 widgets (Fase 6 + 7)",
+              status == 200 and len(widgets) == 6, str(len(widgets)))
 
         status, _body = http("PUT", "/api/v1/settings/theme", {"theme": "dark"})
         check("guardar tema oscuro", status == 200)
+
+        # 4b. Flujos de habitos (Fase 7)
+        status, body = http("POST", "/api/v1/habits",
+                            {"name": "Habito aceptacion", "start_date": "2026-01-01",
+                             "frequency_type": "daily"})
+        habit = json.loads(body) if status in (200, 201) else {}
+        check("crear habito", status == 201, body[:200])
+
+        status, body = http("POST", f"/api/v1/habits/{habit.get('id')}/entries",
+                            {"entry_date": "2026-01-02"})
+        entry = json.loads(body) if status in (200, 201) else {}
+        check("registrar dia del habito", status == 201 and
+              entry.get("status") == "completed", body[:200])
+
+        status, body = http("GET", "/api/v1/habits/today")
+        today = json.loads(body) if status == 200 else []
+        check("vista hoy de habitos", status == 200 and isinstance(today, list))
+
+        status, body = http("GET", "/api/v1/habits/stats")
+        stats = json.loads(body) if status == 200 else []
+        check("metricas de habitos",
+              status == 200 and len(stats) >= 1
+              and "current_streak" in stats[0], body[:200])
+
+        status, body = http("GET", "/api/v1/habits/week")
+        week = json.loads(body) if status == 200 else {}
+        check("vista semanal de habitos",
+              status == 200 and len(week.get("items", [])) >= 1, body[:200])
 
         status, body = http("GET", "/api/v1/export")
         export = json.loads(body) if status == 200 else {}
         check("exportacion JSON versionada",
               status == 200 and export.get("format_version") == 1
               and len(export.get("projects", [])) >= 1
-              and len(export.get("tasks", [])) >= 1)
+              and len(export.get("tasks", [])) >= 1
+              and len(export.get("habits", [])) >= 1
+              and len(export.get("habit_entries", [])) >= 1)
 
         task_id = task.get("id")
         project_id = project.get("id")
@@ -178,6 +209,11 @@ def main():
 
         status, body = http("GET", f"/api/v1/tasks/{task_id}")
         check("reinicio: la tarea se puede consultar por id", status == 200)
+
+        status, body = http("GET", f"/api/v1/habits/{habit.get('id')}")
+        check("reinicio: el habito persiste",
+              status == 200 and json.loads(body).get("name") == "Habito aceptacion",
+              body[:200])
     finally:
         stop_server(proc)
         print("[OK  ] servidor detenido (reinicio completado)")

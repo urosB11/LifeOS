@@ -122,6 +122,14 @@ export async function renderHomeView(container, apiBase) {
       } else if (w.widget_id === "quick_add_note") {
         contentEl.innerHTML = renderQuickAddNote();
         bindQuickAddNote();
+      } else if (w.widget_id === "habits_today") {
+        const res = await fetch(`${apiBase}/habits/today`);
+        const items = await res.json();
+        contentEl.innerHTML = renderHabitsToday(items);
+      } else if (w.widget_id === "habits_week") {
+        const res = await fetch(`${apiBase}/habits/week`);
+        const week = await res.json();
+        contentEl.innerHTML = renderHabitsWeek(week);
       }
     } catch (e) {
       contentEl.innerHTML = `<p class="empty-state">Error cargando contenido.</p>`;
@@ -167,6 +175,78 @@ export async function renderHomeView(container, apiBase) {
         <button class="btn btn--primary btn--sm" id="quick-note-create">Crear nota</button>
       </div>
     `;
+  }
+
+  function renderHabitsToday(items) {
+    const link = `<p style="margin-top:10px;"><a href="#/habits">Ver todos los h&aacute;bitos &rarr;</a></p>`;
+    if (!items.length) {
+      return `<p class="empty-state">No hay h&aacute;bitos programados hoy.</p>${link}`;
+    }
+    const badge = (entry) => {
+      if (!entry) return `<span class="badge habit-badge--partial">Pendiente</span>`;
+      if (entry.status === "completed") return `<span class="badge habit-badge--done">Cumplido</span>`;
+      if (entry.status === "skipped") return `<span class="badge habit-badge--skipped">Omitido</span>`;
+      return `<span class="badge habit-badge--partial">Registrado</span>`;
+    };
+    const rows = items.slice(0, 6).map((item) => `
+      <div class="task-item">
+        <strong>${escapeHtml(item.habit.name)}</strong>
+        ${badge(item.entry)}
+      </div>
+    `).join("");
+    const more = items.length > 6
+      ? `<p style="font-size:0.875rem;color:var(--text-secondary);">+ ${items.length - 6} m&aacute;s</p>`
+      : "";
+    return `<div class="widget-list">${rows}${more}</div>${link}`;
+  }
+
+  function weekCell(day, today) {
+    if (!day.scheduled) {
+      return `<span class="wk-cell wk-cell--off" title="No programado" aria-hidden="true">&middot;</span>`;
+    }
+    if (day.entry_status === "completed") {
+      return `<span class="wk-cell wk-cell--done" title="Cumplido">&#10003;</span>`;
+    }
+    if (day.entry_status === "skipped") {
+      return `<span class="wk-cell wk-cell--skip" title="Omitido">&ndash;</span>`;
+    }
+    if (day.entry_status === "pending") {
+      return `<span class="wk-cell wk-cell--partial" title="Registrado sin completar">&bull;</span>`;
+    }
+    if (day.date > today) {
+      return `<span class="wk-cell wk-cell--future" title="Programado, a&uacute;n sin registrar"></span>`;
+    }
+    return `<span class="wk-cell wk-cell--missed" title="Pendiente de registrar">&#9675;</span>`;
+  }
+
+  function renderHabitsWeek(week) {
+    const link = `<p style="margin-top:10px;"><a href="#/habits">Abrir h&aacute;bitos &rarr;</a></p>`;
+    if (!week.items.length) {
+      return `<p class="empty-state">No hay h&aacute;bitos activos.</p>${link}`;
+    }
+    const head = week.items[0].days.map((d) => {
+      const n = d.date.slice(8, 10);
+      const names = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
+      const weekday = new Date(`${d.date}T00:00:00`).getDay();
+      return `<th class="wk-th" scope="col" title="${d.date}">${names[weekday]} ${n}</th>`;
+    }).join("");
+    const rows = week.items.map((item) => `
+      <tr>
+        <th class="wk-name" scope="row">${escapeHtml(item.habit.name)}</th>
+        ${item.days.map((d) => `<td class="wk-td">${weekCell(d, week.today)}</td>`).join("")}
+      </tr>
+    `).join("");
+    return `
+      <div class="table-wrap">
+        <table class="wk-table">
+          <thead><tr><th class="wk-name" scope="col"><span class="sr-only">H&aacute;bito</span></th>${head}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p class="wk-legend">&#10003; cumplido &middot; &bull; registrado sin completar &middot;
+        &ndash; omitido &middot; &#9675; pendiente &middot; celda vac&iacute;a: programado a&uacute;n
+        futuro &middot; gris: no programado</p>
+      ${link}`;
   }
 
   // Los botones quick-add se vinculan a sus elementos recién creados. Antes

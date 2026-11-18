@@ -16,6 +16,7 @@ from app.api.v1 import (
     backup,
     dashboard,
     export,
+    habits,
     health,
     notes,
     projects,
@@ -38,6 +39,7 @@ app.include_router(health.router, prefix=settings.api_v1_prefix)
 app.include_router(projects.router, prefix=settings.api_v1_prefix)
 app.include_router(tasks.router, prefix=settings.api_v1_prefix)
 app.include_router(notes.router, prefix=settings.api_v1_prefix)
+app.include_router(habits.router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard.router, prefix=settings.api_v1_prefix)
 app.include_router(settings_api.router, prefix=settings.api_v1_prefix)
 app.include_router(analytics.router, prefix=settings.api_v1_prefix)

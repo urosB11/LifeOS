@@ -1,15 +1,15 @@
 # Life OS — Diseño de base de datos
 
-**Estado:** línea base de datos aprobada para el MVP 0.1
-**Versión:** 0.3
-**Fecha:** 17 de noviembre de 2026
+**Estado:** línea base de datos del MVP 0.1 y de la Fase 7 (Hábitos)
+**Versión:** 0.4
+**Fecha:** 18 de noviembre de 2026
 **Relacionado con:** `VISION.md`, `REQUIREMENTS.md`, `ARCHITECTURE.md` y `SECURITY.md`
 
 > Este documento define el modelo lógico del MVP. La implementación SQL concreta se realizará con SQLAlchemy 2.x y migraciones Alembic. Las tablas de dominio son la fuente de verdad; `activity_events` conserva historial complementario, no reemplaza el estado actual.
 
 ## 1. Objetivo
 
-Conservar tareas, proyectos, notas, etiquetas, preferencias y eventos con integridad referencial, respaldo y exportación documentada. El modelo debe ser suficiente para la primera versión y permitir agregar módulos futuros sin crear anticipadamente tablas vacías.
+Conservar tareas, proyectos, notas, etiquetas, hábitos, sus registros diarios, preferencias y eventos con integridad referencial, respaldo y exportación documentada. El modelo debe ser suficiente para la primera versión y permitir agregar módulos futuros sin crear anticipadamente tablas vacías.
 
 ## 2. Entidades
 
@@ -25,8 +25,10 @@ Conservar tareas, proyectos, notas, etiquetas, preferencias y eventos con integr
 | `widget_preferences` | Visibilidad y orden de widgets. |
 | `user_preferences` | Preferencias básicas de la instalación. |
 | `activity_events` | Historial de cambios relevantes. |
+| `habits` | Hábitos con frecuencia, estado y objetivo opcional (Fase 7). |
+| `habit_entries` | Registro diario de un hábito por fecha (Fase 7). |
 
-No crear tablas para Work, Business, Finance, Mind, integraciones o agentes hasta que sus requisitos estén definidos.
+No crear tablas para Work, Business, Finance, integraciones o agentes hasta que sus requisitos estén definidos. Mind se cubre por ahora con notas y hábitos; áreas sin requisitos definidos no crean tablas vacías.
 
 ## 3. Convenciones
 
@@ -49,6 +51,9 @@ Las tablas de unión usan claves primarias compuestas cuando corresponde. `widge
 - Task status: `pending`, `completed`.
 - Task priority: `low`, `normal`, `high` o `NULL` si no se asignó.
 - Project status: `active`, `completed`, `archived`.
+- Habit status: `active`, `paused`, `archived`.
+- Habit frequency type: `daily`, `weekly_days`.
+- Habit entry status: `pending`, `completed`, `skipped`.
 - Guardar valores estables en inglés en la base; localizar etiquetas solo en interfaz.
 - No almacenar valores calculables salvo que sean necesarios para preservar un evento histórico.
 
@@ -61,12 +66,14 @@ notes N ──────────── N projects  (note_project_links)
 notes N ──────────── N tasks     (note_task_links)
 notes N ──────────── N tags      (note_tags)
 
+habits 1 ─────────── N habit_entries
+
 widget_preferences  (catálogo de widgets definido en código)
 user_preferences    (preferencias simples)
 activity_events     (historial complementario)
 ```
 
-Una nota puede tener cero vínculos y cero etiquetas. No se fuerza una clasificación. Una nota puede asociarse con varios proyectos y varias tareas, evitando duplicar contenido.
+Una nota puede tener cero vínculos y cero etiquetas. No se fuerza una clasificación. Una nota puede asociarse con varios proyectos y varias tareas, evitando duplicar contenido. Un hábito puede tener cero registros (aún no se registró ningún día).
 
 ## 5. Tablas
 
@@ -185,7 +192,7 @@ Preferencias iniciales posibles: `timezone` y `theme` (`system`, `light`, `dark`
 |---|---|---|
 | `id` | TEXT | PK UUIDv4. |
 | `event_type` | TEXT | Tipo estable y documentado. |
-| `entity_type` | TEXT | `task`, `project`, `note` o `tag` cuando corresponda. |
+| `entity_type` | TEXT | `task`, `project`, `note`, `tag` o `habit` cuando corresponda. |
 | `entity_id` | TEXT | ID de la entidad; referencia polimórfica. |
 | `occurred_at` | TEXT | Instante UTC obligatorio. |
 | `metadata_json` | TEXT | Opcional; metadatos pequeños, validados y no sensibles. |
@@ -196,11 +203,55 @@ Eventos mínimos:
 - `task.created`, `task.updated`, `task.completed`, `task.reopened`, `task.deleted`;
 - `project.created`, `project.updated`, `project.completed`, `project.reopened`, `project.archived`, `project.restored`, `project.deleted`;
 - `note.created`, `note.updated`, `note.deleted`;
-- `tag.created`.
+- `tag.created`;
+- `habit.created`, `habit.updated`, `habit.status_changed`, `habit.entry_created`, `habit.entry_updated`.
 
 Los cambios de vínculos o etiquetas actualizan `notes.updated_at` y generan `note.updated`; los metadatos indican el tipo de cambio, nunca el cuerpo de la nota, título privado u otro contenido sensible. El evento y el cambio de dominio se confirman en una misma transacción. Los eventos son append-only desde la aplicación.
 
 `entity_type` + `entity_id` es una referencia polimórfica y no puede implementarse como FK convencional. La lógica de aplicación valida la entidad al crear el evento. Los eventos de eliminación conservan la referencia histórica.
+
+### 5.11 `habits`
+
+| Campo | Tipo | Regla |
+|---|---|---|
+| `id` | TEXT | PK UUIDv4. |
+| `name` | TEXT | Obligatorio, no vacío después de normalizar espacios. |
+| `description` | TEXT | Opcional. |
+| `category` | TEXT | Opcional; clasificación libre (ej. "Salud"). |
+| `color` | TEXT | Nullable; color del sistema (hex o token) para la tarjeta. |
+| `frequency_type` | TEXT | `daily` o `weekly_days`; default `daily`. |
+| `frequency_days` | TEXT | Nullable; JSON con la lista de días `0-6` (0=lunes … 6=domingo) solo para `weekly_days`. `NULL` en `daily`. |
+| `start_date` | TEXT | `YYYY-MM-DD` local obligatorio; días anteriores no son programados. |
+| `target_value` | REAL | Nullable; objetivo numérico (hábito cuantificable). `NULL` = binario. |
+| `target_unit` | TEXT | Nullable; unidad del objetivo ("km", "paginas", "min"). |
+| `status` | TEXT | `active`, `paused` o `archived`; default `active`. |
+| `position` | INTEGER | Orden personalizable, no negativo. |
+| `created_at` | TEXT | Instante UTC obligatorio. |
+| `updated_at` | TEXT | Instante UTC obligatorio. |
+
+`frequency_days` es JSON porque SQLite no tiene arrays; la validación de formato y de rango 0-6 ocurre en backend. Los hábitos no se eliminan físicamente mientras tengan registros (se archivan); eliminar un hábito sin registros requiere confirmación, igual que proyectos. El progreso del día se determina por los días programados según la frecuencia vigente **y** `start_date`: no se recalculan los días ya pasados cuando cambia la frecuencia.
+
+### 5.12 `habit_entries`
+
+| Campo | Tipo | Regla |
+|---|---|---|
+| `id` | TEXT | PK UUIDv4. |
+| `habit_id` | TEXT | FK a `habits.id`, `ON DELETE RESTRICT`. |
+| `entry_date` | TEXT | `YYYY-MM-DD` local obligatorio. |
+| `value` | REAL | Nullable; cantidad registrada (hábitos cuantificables). |
+| `status` | TEXT | `pending`, `completed` o `skipped`; default `pending`. |
+| `note` | TEXT | Nullable; texto breve del registro. |
+| `created_at` | TEXT | Instante UTC obligatorio. |
+| `updated_at` | TEXT | Instante UTC obligatorio. |
+
+Restricción `UNIQUE(habit_id, entry_date)`: un solo registro por hábito y fecha. `status` es la única fuente de verdad del cumplimiento; `value` es dato y no recalcula el estado almacenado (se deriva el estado únicamente al escribir). Semántica de un día para un hábito:
+
+- **programado**: aplica ese día según `frequency_type`, `frequency_days` y `start_date`;
+- **no programado**: no aplica; no cuenta como pendiente;
+- **no registrado**: programado sin fila en `habit_entries`; cuenta como pendiente;
+- **omitido**: fila con `status = skipped`.
+
+Los registros existentes se conservan con su fecha y estado aunque después cambie la frecuencia o la configuración del hábito.
 
 ## 6. Integridad y eliminación
 
@@ -209,7 +260,8 @@ Los cambios de vínculos o etiquetas actualizan `notes.updated_at` y generan `no
 - Si un proyecto no tiene tareas, puede eliminarse con confirmación. Sus filas en `note_project_links` se eliminan, y las notas quedan intactas.
 - Eliminar una tarea requiere confirmación; sus filas en `note_task_links` se eliminan, y las notas quedan intactas.
 - Eliminar una nota elimina sus filas en `note_project_links`, `note_task_links` y `note_tags`; no elimina etiquetas compartidas.
-- No hay cascadas desde Projects a Tasks.
+- `habit_entries.habit_id` usa `ON DELETE RESTRICT`: no se puede eliminar físicamente un hábito que conserve registros; archivar es la operación preferida.
+- No hay cascadas desde Projects a Tasks ni desde Habits a HabitEntries.
 - Activar `PRAGMA foreign_keys = ON` por cada conexión SQLite.
 - Las operaciones relacionadas y el evento correspondiente forman una única transacción.
 
@@ -223,6 +275,9 @@ Crear índices para consultas reales del MVP:
 - `note_project_links(project_id)`, `note_task_links(task_id)`;
 - `tags(normalized_name)` UNIQUE;
 - `note_tags(tag_id)`;
+- `habits(status)`, `habits(start_date)`, `habits(position)`;
+- `habit_entries(habit_id, entry_date)` y `habit_entries(entry_date)`;
+- `habit_entries UNIQUE(habit_id, entry_date)` (restricción, no índice adicional);
 - `activity_events(entity_type, entity_id, occurred_at)`;
 - `activity_events(event_type, occurred_at)`.
 
@@ -240,13 +295,28 @@ Las métricas del MVP se calculan en consultas; no se guardan agregados duplicad
 | Proyectos activos | Conteo de projects con `status = active`. | `projects` |
 | Avance de proyecto | `completed tasks / all tasks * 100`; si total es cero, mostrar “Sin tareas”. | `tasks` |
 
-Son indicadores del estado actual, no análisis de rendimiento histórico. `activity_events` prepara informes temporales futuros. No presentar métricas de hábitos, finanzas o productividad hasta que esos módulos existan y sus fórmulas estén definidas.
+Son indicadores del estado actual, no análisis de rendimiento histórico. `activity_events` prepara informes temporales futuros. No presentar métricas de finanzas u otras áreas hasta que sus módulos existan y sus fórmulas estén definidas.
+
+### 8.1 Métricas de hábitos (Fase 7)
+
+Se calculan en consultas desde `habits` + `habit_entries`; no se guardan agregados. El período se determina con la zona horaria del usuario (fechas de calendario local) y **solo cuentan los días programados** como denominador:
+
+| Métrica | Fórmula / regla | Denominador y tratamiento de faltantes |
+|---|---|---|
+| Racha actual | Mayor cantidad de días consecutivos con `status = completed` que termina en el día local actual. | Si hoy no está completado (y es programado), la racha es 0. Días no programados no interrumpen la racha. |
+| Mejor racha | Mayor cantidad de días consecutivos con `status = completed` en todo el historial. | Igual tratamiento de días no programados. |
+| Cumplimiento semanal | `entradas completed en la semana / días programados en la semana * 100`. | Semana = lunes a domingo local. Días programados sin entrada cuentan en el denominador y no en el numerador. |
+| Cumplimiento mensual | `entradas completed en el mes / días programados en el mes * 100`. | Mes calendario local. Mismo tratamiento. |
+| Consistencia | `entradas (completed + skipped) / días programados * 100` en el período. | Incluye omitidos como registrados; los no registrados restan. |
+| Progreso vs objetivo | `value / target_value` por día; se considera completado al registrar `value >= target_value`. | Solo hábitos con `target_value`; si no hay objetivo, se usa `status` directamente. |
+
+Si el denominador es cero (sin días programados en el período), mostrar “Sin datos” y no 0 %. Los días no programados no entran en ningún denominador. `status = completed` de la entrada es siempre la fuente de verdad; ninguna métrica lo recalcula.
 
 ## 9. Exportación, backup y restauración
 
 ### 9.1 Exportación JSON
 
-La exportación incluye `format_version`, `exported_at`, `projects`, `tasks`, `notes`, `note_project_links`, `note_task_links`, `tags`, `note_tags`, `widget_preferences`, `user_preferences` y `activity_events`. Se define de manera independiente del ORM y conserva IDs y relaciones.
+La exportación incluye `format_version`, `exported_at`, `projects`, `tasks`, `notes`, `note_project_links`, `note_task_links`, `tags`, `note_tags`, `habits`, `habit_entries`, `widget_preferences`, `user_preferences` y `activity_events`. Se define de manera independiente del ORM y conserva IDs y relaciones.
 
 No se implementa importación de JSON desde la interfaz en el MVP.
 
@@ -287,6 +357,9 @@ La aplicación crea el directorio si no existe e informa errores de permisos o e
 11. Exportación JSON conservando IDs y relaciones.
 12. Backup y restauración en entorno de prueba.
 13. Migración desde base vacía y desde una versión previa de prueba.
+14. CRUD de hábitos y transiciones `active`/`paused`/`archived`.
+15. Único registro por hábito y fecha; corrección de registros; conservación del historial ante cambios de frecuencia.
+16. Rachas, cumplimiento y consistencia con datos sintéticos conocidos (fórmulas de la sección 8.1).
 
 ## 13. Decisiones cerradas y límites
 

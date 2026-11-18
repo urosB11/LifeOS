@@ -133,16 +133,17 @@ La skill Anthropic `frontend-design` puede proponer refinamientos, pero cualquie
 | Tasks | CRUD, estados, prioridades, vencimientos y vínculo opcional a proyecto. |
 | Projects | CRUD, estados activo/completado/archivado y consulta de tareas/notas relacionadas. |
 | Notes | CRUD, búsqueda simple, vínculos opcionales con múltiples proyectos/tareas y etiquetas. |
+| Hábitos | CRUD con frecuencias, registro diario por día programado, calendario/semana y métricas de racha y cumplimiento. |
 | Settings | Tema, zona horaria y preferencias básicas del dashboard. |
 | Dashboard / Widgets | Catálogo interno, visibilidad, orden y datos derivados de otros módulos. |
-| Analytics básico | Consultas deterministas de tareas y proyectos; sin LLM ni tablas de agregados. |
+| Analytics básico | Consultas deterministas de tareas, proyectos y hábitos; sin LLM ni tablas de agregados. |
 
 Work, Business, Finance, Mind, App Center ampliado y AI Orchestrator se mantienen como áreas futuras. No se crearán módulos vacíos o tablas preparatorias para ellas.
 
 ## 6. Dashboard y sistema de widgets
 
 - El catálogo de widgets se define en código y usa IDs estables.
-- El MVP incluye `upcoming_tasks`, `active_projects`, `quick_add_task` y `quick_add_note`.
+- El MVP incluye `upcoming_tasks`, `active_projects`, `quick_add_task`, `quick_add_note`, `habits_today` y `habits_week`.
 - La base almacena visibilidad y posición, no código ejecutable.
 - Los widgets consultan servicios o endpoints existentes.
 - Los errores de un widget no deben impedir renderizar el resto del dashboard.
@@ -157,6 +158,7 @@ El modelo detallado y las políticas de integridad están en `DATABASE.md`. Enti
 - `projects`, `tasks`, `notes`;
 - `note_project_links`, `note_task_links`;
 - `tags`, `note_tags`;
+- `habits`, `habit_entries`;
 - `widget_preferences`, `user_preferences`;
 - `activity_events`.
 
@@ -170,7 +172,8 @@ Analytics es transversal por diseño, pero su primera implementación es deliber
 
 - cantidad de tareas pendientes, completadas y vencidas;
 - cantidad de proyectos activos;
-- avance de tareas por proyecto.
+- avance de tareas por proyecto;
+- hábitos activos, programados hoy, completados hoy, omitidos hoy y pendientes hoy.
 
 Se calculan desde datos operativos y fechas locales; no se almacenan agregados duplicados. Cada métrica debe documentar fórmula, fuente, fecha/período y tratamiento de datos faltantes. El historial de eventos deja preparada la evolución temporal sin construir todavía un almacén analítico.
 
@@ -188,6 +191,12 @@ Prefijo: `/api/v1`.
 | `/notes/{id}/tasks` | Consultar y modificar relaciones con tareas. |
 | `/tags` | Listar y crear etiquetas reutilizables. |
 | `/notes/{id}/tags` | Consultar, asignar y quitar etiquetas. |
+| `/habits` | GET con filtro de estado/categoría, POST; `/habits/{id}` GET, PATCH, DELETE restringido; `/habits/{id}/pause|resume|archive|restore`. |
+| `/habits/today` | Hábitos activos programados para hoy con su registro. |
+| `/habits/week` | Semana local (lunes-domingo) con programación y registro por hábito. |
+| `/habits/stats` | Rachas y cumplimiento de un hábito (`habit_id`) o de todos los no archivados. |
+| `/habits/{id}/entries` | GET historial con rango `from`/`to`, POST nuevo registro; `/habits/{id}/entries/{fecha}` PATCH y DELETE. |
+| `/habits/{id}/calendar` | Días de un mes (`YYYY-MM`) con programación y registro. |
 | `/dashboard/widgets` | Consultar catálogo y guardar preferencias de visibilidad/orden. |
 | `/dashboard/summary` | Resumen de Home. |
 | `/analytics/summary` | Indicadores básicos documentados. |
@@ -230,6 +239,7 @@ life-os/
 │   │       ├── tasks/
 │   │       ├── projects/
 │   │       ├── notes/
+│   │       ├── habits/
 │   │       ├── dashboard/
 │   │       └── analytics/
 │   └── tests/

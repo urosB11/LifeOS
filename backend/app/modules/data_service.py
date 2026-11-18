@@ -17,6 +17,7 @@ from app.db.activity import ActivityEvent
 from app.db.session import engine
 from app.modules.dashboard.models import WidgetPreference
 from app.modules.dashboard.repository import UserPreferenceRepository
+from app.modules.habits.models import Habit, HabitEntry
 from app.modules.notes.models import Note, NoteProjectLink, NoteTag, NoteTaskLink, Tag
 from app.modules.projects.models import Project
 from app.modules.tasks.models import Task
@@ -45,6 +46,8 @@ def build_export(db) -> dict[str, Any]:
         "note_task_links": list_table(NoteTaskLink),
         "tags": list_table(Tag),
         "note_tags": list_table(NoteTag),
+        "habits": list_table(Habit),
+        "habit_entries": list_table(HabitEntry),
         "widget_preferences": list_table(WidgetPreference),
         "user_preferences": [
             {"key": p.key, "value": p.value, "updated_at": p.updated_at}

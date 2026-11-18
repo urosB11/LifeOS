@@ -1,4 +1,4 @@
-"""Verificación de migraciones (Fase 6): base vacía, desde 0004, downgrade/upgrade."""
+"""Verificación de migraciones (Fases 6-7): base vacía, desde 0004, downgrade/upgrade."""
 
 import os
 import sqlite3
@@ -10,6 +10,24 @@ DATA_DIR = tempfile.mkdtemp(prefix="lifeos_mig_")
 ENV = {**os.environ, "LIFEOS_DATA_DIR": DATA_DIR}
 DB_PATH = os.path.join(DATA_DIR, "lifeos.db")
 ALEMBIC = os.path.join(os.path.dirname(sys.executable), "alembic.exe")
+
+HEAD = "0005_habits"
+PREV = "0004_widget_boolean"
+
+BASE_TABLES = {
+    "activity_events",
+    "alembic_version",
+    "note_project_links",
+    "note_tags",
+    "note_task_links",
+    "notes",
+    "projects",
+    "tags",
+    "tasks",
+    "user_preferences",
+    "widget_preferences",
+}
+HABIT_TABLES = {"habits", "habit_entries"}
 
 
 def run(*args: str) -> subprocess.CompletedProcess:
@@ -56,42 +74,111 @@ def check_integrity(label: str) -> None:
         conn.close()
 
 
+def check_version(expected: str) -> None:
+    conn = db()
+    try:
+        version = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+        assert version == expected, f"Versión esperada {expected}, obtenida {version}"
+        print(f"OK alembic_version = {version}")
+    finally:
+        conn.close()
+
+
+def insert_sample_data() -> None:
+    """Datos sintéticos de todas las entidades (incluidas hábitos)."""
+    conn = db()
+    conn.execute(
+        "INSERT INTO projects (id, name, status, created_at, updated_at) "
+        "VALUES ('p1', 'Proyecto prueba', 'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO tasks (id, title, status, project_id, created_at, updated_at) "
+        "VALUES ('t1', 'Tarea prueba', 'pending', 'p1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO habits (id, name, frequency_type, start_date, status, position, "
+        "created_at, updated_at) VALUES ('h1', 'Habito prueba', 'daily', '2026-01-01', "
+        "'active', 0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO habit_entries (id, habit_id, entry_date, status, created_at, updated_at) "
+        "VALUES ('e1', 'h1', '2026-01-01', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )
+    # UNIQUE(habit_id, entry_date) debe rechazar un segundo registro del día
+    try:
+        conn.execute(
+            "INSERT INTO habit_entries (id, habit_id, entry_date, status, created_at, updated_at) "
+            "VALUES ('e2', 'h1', '2026-01-01', 'pending', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+        )
+    except sqlite3.IntegrityError as exc:
+        assert "UNIQUE" in str(exc).upper(), f"Error inesperado: {exc}"
+        print("OK UNIQUE(habit_id, entry_date) rechaza el duplicado")
+    else:
+        raise AssertionError("El registro duplicado de hábito no fue rechazado")
+    # FK RESTRICT: no se puede borrar un hábito con registros
+    try:
+        conn.execute("DELETE FROM habits WHERE id='h1'")
+    except sqlite3.IntegrityError as exc:
+        assert "FOREIGN KEY" in str(exc).upper(), f"Error inesperado: {exc}"
+        print("OK FK RESTRICT: hábito con registros no se elimina")
+    else:
+        raise AssertionError("La FK RESTRICT de habits no impidió el borrado")
+    conn.commit()
+    conn.close()
+    print("OK datos sintéticos insertados")
+
+
+def assert_core_data() -> None:
+    conn = db()
+    try:
+        rows = conn.execute("SELECT id, name FROM projects").fetchall()
+        assert rows == [("p1", "Proyecto prueba")], f"Datos alterados: {rows}"
+        task = conn.execute("SELECT project_id FROM tasks WHERE id='t1'").fetchone()
+        assert task == ("p1",), f"FK alterada: {task}"
+    finally:
+        conn.close()
+
+
 # 1. Base vacía → upgrade head
 run("upgrade", "head")
-expected = {
-    "activity_events",
-    "alembic_version",
-    "note_project_links",
-    "note_tags",
-    "note_task_links",
-    "notes",
-    "projects",
-    "tags",
-    "tasks",
-    "user_preferences",
-    "widget_preferences",
-}
 got = set(tables())
-missing = expected - got
+missing = (BASE_TABLES | HABIT_TABLES) - got
 assert not missing, f"Faltan tablas: {missing}"
 print(f"OK base vacía → head: {len(got)} tablas")
 check_integrity("base vacía")
+check_version(HEAD)
 
-# 2. Datos sintéticos antes del downgrade
+# 2. Datos sintéticos (incluye hábitos y sus restricciones)
+insert_sample_data()
+
+# 3. Downgrade a 0004 (versión previa real) y re-upgrade a head
+run("downgrade", PREV)
 conn = db()
-conn.execute(
-    "INSERT INTO projects (id, name, status, created_at, updated_at) "
-    "VALUES ('p1', 'Proyecto prueba', 'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
-)
-conn.execute(
-    "INSERT INTO tasks (id, title, status, project_id, created_at, updated_at) "
-    "VALUES ('t1', 'Tarea prueba', 'pending', 'p1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
-)
-conn.commit()
-conn.close()
-print("OK datos sintéticos insertados")
+try:
+    remaining = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "habits" not in remaining and "habit_entries" not in remaining
+    assert BASE_TABLES <= remaining, f"Faltan tablas de 0004: {BASE_TABLES - remaining}"
+finally:
+    conn.close()
+check_integrity("tras downgrade a 0004")
+check_version(PREV)
+print("OK downgrade a 0004_widget_boolean: tablas de hábitos eliminadas, 0004 intacta")
 
-# 3. Downgrade a 0001 (versión previa de prueba) y re-upgrade
+run("upgrade", "head")
+assert_core_data()
+conn = db()
+try:
+    assert tables() and (BASE_TABLES | HABIT_TABLES) <= set(tables())
+    # Los registros de hábitos vivían en 0005: se recrean vacías (esperado)
+    n = conn.execute("SELECT COUNT(*) FROM habit_entries").fetchone()[0]
+    assert n == 0, f"habit_entries debería estar vacía tras re-upgrade, tiene {n}"
+finally:
+    conn.close()
+check_integrity("re-upgrade desde 0004")
+check_version(HEAD)
+print("OK upgrade desde 0004 a head: datos 0004 intactos y tablas de hábitos creadas")
+
+# 4. Downgrade a 0001 (versión histórica de prueba) y re-upgrade
 run("downgrade", "0001_initial_schema")
 conn = db()
 try:
@@ -100,7 +187,7 @@ try:
     assert "projects" in remaining and "tasks" in remaining
     assert "notes" not in remaining, "0001 no debe tener notes"
     assert "widget_preferences" not in remaining, "0001 no debe tener widget_preferences"
-    # Los datos de 0001 deben sobrevivir al downgrade
+    assert "habits" not in remaining, "0001 no debe tener habits"
     rows = conn.execute("SELECT id, name FROM projects").fetchall()
     assert rows == [("p1", "Proyecto prueba")], f"Datos de 0001 alterados: {rows}"
 finally:
@@ -108,24 +195,9 @@ finally:
 print("OK downgrade a 0001_initial_schema: solo tablas 0001 + datos intactos")
 
 run("upgrade", "head")
-conn = db()
-try:
-    rows = conn.execute("SELECT id, name FROM projects").fetchall()
-    assert rows == [("p1", "Proyecto prueba")], f"Datos alterados tras re-upgrade: {rows}"
-    task = conn.execute("SELECT project_id FROM tasks WHERE id='t1'").fetchone()
-    assert task == ("p1",), f"FK alterada tras re-upgrade: {task}"
-finally:
-    conn.close()
-print("OK re-upgrade a head: datos y FK intactos")
+assert_core_data()
 check_integrity("re-upgrade")
-
-# 4. Verificación final: head == 0004_widget_boolean
-conn = db()
-try:
-    version = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-    assert version == "0004_widget_boolean", f"Versión esperada 0004_widget_boolean, obtenida {version}"
-    print(f"OK alembic_version = {version}")
-finally:
-    conn.close()
+check_version(HEAD)
+print("OK re-upgrade a head: datos y FK intactos")
 
 print(f"\nTODAS LAS VERIFICACIONES PASARON (dir: {DATA_DIR})")

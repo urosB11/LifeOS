@@ -30,6 +30,8 @@ def test_backup_sqlite_to_file_creates_valid_copy(tmp_path):
             "tasks",
             "notes",
             "tags",
+            "habits",
+            "habit_entries",
             "widget_preferences",
             "user_preferences",
             "activity_events",

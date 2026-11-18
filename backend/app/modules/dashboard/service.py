@@ -47,6 +47,20 @@ WIDGET_CATALOG: list[WidgetCatalogItem] = [
         default_visible=True,
         default_position=3,
     ),
+    WidgetCatalogItem(
+        widget_id="habits_today",
+        label="Hábitos de hoy",
+        description="Hábitos programados para hoy con su estado de registro",
+        default_visible=True,
+        default_position=4,
+    ),
+    WidgetCatalogItem(
+        widget_id="habits_week",
+        label="Semana de hábitos",
+        description="Programación y registros de la semana por hábito",
+        default_visible=True,
+        default_position=5,
+    ),
 ]
 
 

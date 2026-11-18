@@ -1,6 +1,27 @@
 # Changelog
 
-Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/). Las versiones siguen [SemVer](https://semver.org/lang/es/) mientras el producto evolucione.
+Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/). Las versiones siguen [SemVer](https://semver.org/lang/es/) mientras el producto evolucione. Ambas entradas sin etiqueta `[Unreleased]` esperan release: la de Fase 7 (Life OS 0.2) sobre la de Fase 6.
+
+## [Unreleased] — Fase 7: Habit Tracker (Life OS 0.2)
+
+### Added
+
+- **Módulo de hábitos:** tablas `habits` y `habit_entries` (migración `0005_habits`) con `UNIQUE(habit_id, entry_date)`, índices de consulta y `ON DELETE RESTRICT`; modalidades binaria y cuantificable (`target_value`/`target_unit`) con colores hex y categorías.
+- **Frecuencias:** `daily` y `weekly_days` (0=lunes … 6=domingo, JSON en `frequency_days`) validadas en backend sobre el estado fusionado del hábito; sin motor de recurrencias.
+- **API `/api/v1/habits`:** CRUD con filtros de estado/categoría y posición autoasignada; transiciones `pause`/`resume`/`archive`/`restore` idempotentes (inválidas → 409); borrado físico solo sin registros (409 con registros).
+- **Registros diarios:** `POST/GET /habits/{id}/entries` con un registro por día, días futuros/no programados rechazados, corrección por `DELETE` de registro y `PATCH` por fecha sin duplicar historial; `GET /habits/today`, `GET /habits/week` y `GET /habits/{id}/calendar` con la regla de días programados en backend.
+- **Métricas (DATABASE.md §8.1):** `GET /habits/stats` con racha actual, mejor racha, cumplimiento semanal/mensual y consistencia; denominadores solo con días programados y `null` → "Sin datos" cuando el denominador es cero.
+- **Vista Hábitos:** registro rápido del día (hecho/omitir/cantidad/deshacer), resumen del día, tabla de métricas, calendario mensual por hábito, gestión con filtros y reordenamiento; navegación `#/habits`.
+- **Widgets:** `habits_today` y `habits_week` en el catálogo (visibles por defecto) con celdas semanales por estado y leyenda; `habits` en `/analytics/summary` (activos, programados/completados/omitidos/pendientes hoy).
+- **Exportación/backup:** `habits` y `habit_entries` incluidos en el JSON versionado y verificados en el respaldo.
+- **Pruebas y verificación:** `tests/test_habits.py` (CRUD, validaciones, transiciones, registros, calendario, semana y métricas con datos sintéticos), tests de widgets/analytics/export actualizados; `verify_acceptance.py` ampliado a 23 checks (Fase 7 incluida) y `verify_migrations.py` con 13 tablas.
+
+### Changed
+
+- Catálogo de widgets de 4 a 6 entradas (`REQUIREMENTS.md` FR-HOME-02) y navegación principal con "Hábitos" (FR-APP-02).
+- `AnalyticsService` ahora resume también hábitos del día local usando solo estados guardados.
+- `DATABASE.md` v0.4: entidades, eventos `habit.*`, métricas §8.1, exportación §9.1 y pruebas 14–16.
+- Requisitos FR-HAB-01..15 y criterios 18–20; roadmap con la Fase 7; guía de usuario con la sección Hábitos.
 
 ## [Unreleased] — Fase 6: Estabilización y aceptación del MVP 0.1
 

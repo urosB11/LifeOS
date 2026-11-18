@@ -3,6 +3,7 @@
 import { renderProjectsView } from "./projects.js";
 import { renderTasksView } from "./tasks.js";
 import { renderNotesView } from "./notes.js";
+import { renderHabitsView } from "./habits.js";
 import { renderHomeView } from "./home.js";
 import { renderSettingsView } from "./settings.js";
 
@@ -51,6 +52,8 @@ async function route() {
     await renderTasksView(viewEl, API_BASE);
   } else if (hash === "#/notes") {
     await renderNotesView(viewEl, API_BASE);
+  } else if (hash === "#/habits") {
+    await renderHabitsView(viewEl, API_BASE);
   } else if (hash === "#/settings") {
     await renderSettingsView(viewEl, API_BASE);
   } else {

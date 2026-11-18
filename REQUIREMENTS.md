@@ -2,7 +2,7 @@
 
 **Estado:** línea base de requisitos para implementación
 **Versión:** 0.2
-**Fecha:** 17 de noviembre de 2026
+**Fecha:** 18 de noviembre de 2026
 **Relacionado con:** `VISION.md`, `ARCHITECTURE.md`, `DATABASE.md` y `SECURITY.md`
 
 > Este documento define qué debe hacer el MVP. Las decisiones funcionales que afectan a esta versión están cerradas aquí; las tecnologías y límites técnicos se desarrollan en `ARCHITECTURE.md`.
@@ -26,7 +26,7 @@ Entregar una aplicación web local, responsive y de un solo usuario que permita 
 
 **FR-APP-01 — Inicio local.** La aplicación se inicia en el equipo del usuario siguiendo el README y se abre en el navegador.
 
-**FR-APP-02 — Navegación principal.** Debe ofrecer acceso claro a Home, Tasks, Projects, Notes y Settings.
+**FR-APP-02 — Navegación principal.** Debe ofrecer acceso claro a Home, Tasks, Projects, Notes, Hábitos y Settings.
 
 **FR-APP-03 — Diseño responsive.** La interfaz se adapta a escritorio, tablet y móvil sin perder acceso a las funciones principales.
 
@@ -42,6 +42,8 @@ Entregar una aplicación web local, responsive y de un solo usuario que permita 
 2. `active_projects`: proyectos activos.
 3. `quick_add_task`: acceso rápido para crear una tarea.
 4. `quick_add_note`: acceso rápido para crear una nota.
+5. `habits_today`: hábitos activos programados para hoy con su estado de registro.
+6. `habits_week`: programación y registros de la semana local por hábito.
 
 **FR-HOME-03 — Visibilidad.** El usuario puede mostrar u ocultar cualquiera de los widgets disponibles.
 
@@ -111,11 +113,11 @@ Entregar una aplicación web local, responsive y de un solo usuario que permita 
 
 ### 3.6 Persistencia, exportación y respaldo
 
-**FR-DATA-01 — Persistencia.** Tareas, proyectos, notas, etiquetas, relaciones, preferencias y eventos se guardan localmente.
+**FR-DATA-01 — Persistencia.** Tareas, proyectos, notas, etiquetas, relaciones, hábitos y sus registros, preferencias y eventos se guardan localmente.
 
 **FR-DATA-02 — Reinicio.** Cerrar y reiniciar la aplicación no provoca pérdida de datos.
 
-**FR-DATA-03 — Exportación.** El usuario puede exportar los datos funcionales en JSON versionado y documentado, incluyendo relaciones, etiquetas y preferencias. El formato no depende de detalles internos del ORM.
+**FR-DATA-03 — Exportación.** El usuario puede exportar los datos funcionales en JSON versionado y documentado, incluyendo relaciones, etiquetas, hábitos y preferencias. El formato no depende de detalles internos del ORM.
 
 **FR-DATA-04 — Backup.** Debe existir un procedimiento verificable para generar una copia de seguridad consistente de SQLite.
 
@@ -140,6 +142,40 @@ Entregar una aplicación web local, responsive y de un solo usuario que permita 
 **FR-AN-03 — Progreso por proyecto.** El detalle de un proyecto puede mostrar tareas completadas sobre el total de tareas asociadas. Si no tiene tareas, se muestra “Sin tareas”, no 0 %.
 
 **FR-AN-04 — Definición de métricas.** Toda métrica debe tener fórmula, fuente y período claros. Las cifras se calculan de forma determinista, sin IA.
+
+**FR-AN-05 — Resumen de hábitos.** El resumen analítico incluye hábitos activos, programados hoy, completados hoy, omitidos hoy y pendientes hoy, usando solo los estados guardados en base.
+
+### 3.9 Hábitos (Fase 7)
+
+**FR-HAB-01 — Crear.** El usuario crea un hábito con nombre obligatorio y descripción, categoría, color (hex `#RGB` o `#RRGGBB`), fecha de inicio y frecuencia opcionales.
+
+**FR-HAB-02 — Modalidades.** Un hábito es binario (cumplimiento sí/no) o cuantificable con `target_value` y `target_unit` opcionales; la unidad requiere cantidad objetivo.
+
+**FR-HAB-03 — Frecuencias.** Solo `daily` y `weekly_days` con días 0=lunes … 6=domingo; sin duplicados ni fuera de rango. No se implementa motor de recurrencias en el MVP.
+
+**FR-HAB-04 — Consultar.** Se listan los hábitos con filtro por estado y categoría, orden por posición, y se abre el detalle de cada uno.
+
+**FR-HAB-05 — Editar.** Puede modificar nombre, descripción, categoría, color, frecuencia, objetivo y posición; la validación cruzada (por ejemplo `weekly_days` con al menos un día) usa el estado fusionado del hábito.
+
+**FR-HAB-06 — Estados.** Los estados son `active`, `paused` y `archived`. Pausar requiere activo, reactivar requiere pausado, archivar parte de activo o pausado y restaurar requiere archivado; las transiciones son idempotentes y las inválidas responden conflicto.
+
+**FR-HAB-07 — Archivar y eliminar.** Archivar es la operación preferida y conserva los registros. La eliminación física solo se permite sin registros; con registros responde conflicto (409).
+
+**FR-HAB-08 — Registro diario.** El usuario registra un día del hábito (por defecto el día local actual). No se permiten días futuros, días no programados ni días anteriores a la fecha de inicio; hay un único registro por hábito y día, que se corrige con PATCH o se elimina (el día vuelve a no registrado).
+
+**FR-HAB-09 — Estados de registro.** Los registros son `pending`, `completed` y `skipped`; `status` es la única fuente de verdad del cumplimiento y ninguna métrica lo recalcula. Al escribir un valor en un hábito cuantificable se deriva `completed` si `value >= target_value`.
+
+**FR-HAB-10 — Vista de hoy.** La vista de Hábitos muestra los hábitos activos programados para el día local con su registro, permitiendo marcar, omitir, guardar cantidad y deshacer.
+
+**FR-HAB-11 — Calendario.** Cada hábito muestra un calendario mensual con la programación y el estado de registro por día; la regla de días programados vive en backend y la interfaz solo lo representa.
+
+**FR-HAB-12 — Métricas.** Racha actual, mejor racha, cumplimiento semanal/mensual y consistencia, con las fórmulas de `DATABASE.md` sección 8.1: solo los días programados entran en los denominadores y un denominador cero muestra “Sin datos”, no 0 %.
+
+**FR-HAB-13 — Widgets.** `habits_today` y `habits_week` están en el catálogo, visibles por defecto y leen los endpoints existentes sin duplicar reglas ni datos.
+
+**FR-HAB-14 — Exportación.** `habits` y `habit_entries` se incluyen en la exportación JSON y en el respaldo SQLite, con IDs y relaciones conservados.
+
+**FR-HAB-15 — Límites.** Sin notificaciones, gamificación excesiva, IA ni sincronización: el seguimiento es manual y offline; los eventos de actividad no incluyen nombres ni contenido de hábitos.
 
 ## 4. Requisitos no funcionales
 
@@ -178,12 +214,15 @@ El MVP se acepta cuando se demuestre que:
 15. Los flujos principales funcionan sin Internet ni IA.
 16. Las vistas principales son utilizables en escritorio y móvil.
 17. Las pruebas críticas pasan y no hay defectos conocidos de pérdida/corrupción de datos o exposición de red.
+18. Se crean, editan, pausan, reactivan, archivan y restauran hábitos; no se elimina físicamente un hábito con registros.
+19. Solo se registran días programados y no futuros; corregir un registro no duplica el historial.
+20. Las métricas de hábitos (rachas, cumplimiento y consistencia) coinciden con conjuntos sintéticos conocidos y con las fórmulas documentadas.
 
-## 6. Fuera de alcance del MVP 0.1
+## 6. Fuera de alcance (versión 0.2)
 
 - Módulos completos Work, Business, Finance y Mind.
 - Centro avanzado de Analytics transversal, comparaciones históricas, objetivos y reporting avanzado.
-- Calendario sincronizado, hábitos y gestor completo de conocimiento.
+- Calendario sincronizado con terceros y gestor completo de conocimiento.
 - IA conversacional, memoria semántica y agentes autónomos.
 - Integraciones Gmail, Calendar, Telegram, GitHub u otros servicios.
 - Sincronización cloud, acceso remoto, multiusuario y colaboración.
@@ -191,6 +230,7 @@ El MVP se acepta cuando se demuestre que:
 - Aplicaciones móviles nativas o empaquetado desktop.
 - Adjuntos, imágenes, rich text y Markdown enriquecido dentro de notas.
 - Importación/restauración de JSON desde la interfaz.
+- Notificaciones externas, rachas con recompensas ni gamificación de hábitos.
 
 ## 7. Decisiones de línea base
 

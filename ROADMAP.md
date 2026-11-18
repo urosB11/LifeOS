@@ -147,11 +147,32 @@ La especificación visual, las rutas de archivos, los requisitos y los modelos d
 
 **Salida:** todos los criterios de aceptación pasan; no quedan defectos críticos; instalación, uso y recuperación pueden repetirse.
 
+### Fase 7 — Habit Tracker (Life OS 0.2)
+
+**Objetivo:** entregar seguimiento de hábitos diarios con registros, métricas verificables y widgets, sin gamificación ni notificaciones.
+
+**Trabajo:**
+- modelos `habits` y `habit_entries` con migración `0005_habits`, `UNIQUE(habit_id, entry_date)`, índices y `ON DELETE RESTRICT`;
+- modalidades binaria y cuantificable (`target_value`/`target_unit`); frecuencias `daily` y `weekly_days` con días 0=lunes … 6=domingo; sin motor de recurrencias;
+- CRUD de hábitos con validación de configuración sobre estado fusionado y transiciones `pause/resume/archive/restore` idempotentes (inválidas → 409);
+- borrado físico solo sin registros; archivar como operación preferida;
+- registro diario: un registro por día programado y no futuro, corrección con PATCH sin duplicar historial y borrado que devuelve el día a no registrado;
+- vista de hoy, calendario mensual y vista semanal con la regla de días programados en backend;
+- métricas (racha actual, mejor racha, cumplimiento semanal/mensual y consistencia) según `DATABASE.md` sección 8.1, con “Sin datos” cuando el denominador es cero;
+- widgets `habits_today` y `habits_week` visibles por defecto y resumen de hábitos en `/analytics/summary`;
+- `habits` y `habit_entries` en exportación JSON y respaldo;
+- eventos `habit.*` con metadatos sin nombres ni contenido;
+- pruebas de CRUD, validaciones, transiciones, registros, métricas con datos sintéticos, widgets y export; verificación de aceptación end-to-end.
+
+**Entregables:** hábitos usables desde interfaz y API, métricas verificadas y documentación actualizada.
+
+**Salida:** se cumplen FR-HAB-01 a FR-HAB-15; las métricas coinciden con conjuntos sintéticos conocidos; no hay pérdida de datos; las funciones esenciales operan offline.
+
 ## 5. Backlog posterior al MVP
 
 Orden tentativo, revisable según uso real:
 
-1. Agenda, objetivos y hábitos.
+1. Agenda y objetivos (los hábitos se entregaron en la Fase 7).
 2. Work: CV, portfolio, vacantes, postulaciones y entrevistas.
 3. Business: clientes, proyectos comerciales, ventas e ingresos.
 4. Finance: cuentas, movimientos, presupuestos y reportes específicos.

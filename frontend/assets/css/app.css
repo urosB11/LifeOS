@@ -47,6 +47,7 @@ body {
 .nav {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .nav__link {
@@ -434,6 +435,395 @@ body.theme-dark .widget-position {
   gap: 6px;
 }
 
+/* --- Hábitos (Fase 7) --- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.habits-today {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.habit-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+
+.habit-row--done {
+  background: #EEF6F3;
+  border-color: #CDE3DC;
+}
+
+body.theme-dark .habit-row--done {
+  background: #22322C;
+  border-color: #2F4A42;
+}
+
+.habit-row__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.habit-row__name {
+  font-weight: 600;
+}
+
+.habit-row__meta {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.habit-row__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.habit-row__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 180px;
+}
+
+.habit-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-secondary);
+}
+
+.habit-dot--none { background: #B4BEB9; }
+.habit-dot--1 { background: #267568; }
+.habit-dot--2 { background: #2E5E8C; }
+.habit-dot--3 { background: #6B4E71; }
+.habit-dot--4 { background: #9C5A3C; }
+.habit-dot--5 { background: #4A5568; }
+
+.habit-badge--done {
+  background: #E9F3EC;
+  color: #2F7D52;
+}
+
+.habit-badge--partial {
+  background: #FBF3DC;
+  color: #9A7D0A;
+}
+
+.habit-badge--skipped {
+  background: #ECEFF1;
+  color: #5F6B72;
+}
+
+.progress {
+  flex: 1;
+  height: 8px;
+  background: #E8EDEB;
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 90px;
+}
+
+.progress__bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.progress__text {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.habit-value-input {
+  width: 90px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9375rem;
+}
+
+/* Calendario de consistencia */
+.cal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.cal-header__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cal__weekdays,
+.cal__days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.cal__weekdays {
+  margin-bottom: 6px;
+}
+
+.cal__weekdays span {
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  border: 1px solid transparent;
+}
+
+.cal-day--empty {
+  visibility: hidden;
+}
+
+.cal-day--off {
+  background: #F1F4F3;
+  color: #A8B2AD;
+}
+
+.cal-day--future {
+  background: #FFFFFF;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.cal-day--missed {
+  background: #FDECEA;
+  color: var(--danger);
+}
+
+.cal-day--done {
+  background: #267568;
+  color: #FFFFFF;
+}
+
+.cal-day--partial {
+  background: #FBF3DC;
+  color: #9A7D0A;
+}
+
+.cal-day--skipped {
+  background: #ECEFF1;
+  color: #5F6B72;
+}
+
+.cal-day--today {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  font-weight: 700;
+}
+
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.cal-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cal-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+  border: 1px solid var(--border);
+}
+
+.cal-swatch.cal-day--done { background: #267568; border-color: #267568; }
+.cal-swatch.cal-day--partial { background: #FBF3DC; }
+.cal-swatch.cal-day--skipped { background: #ECEFF1; }
+.cal-swatch.cal-day--missed { background: #FDECEA; }
+.cal-swatch.cal-day--off { background: #F1F4F3; }
+
+body.theme-dark .cal-day--off {
+  background: #1A1F1D;
+  color: #5A645F;
+}
+
+body.theme-dark .cal-day--future {
+  background: var(--surface);
+}
+
+body.theme-dark .cal-day--missed {
+  background: #3A2422;
+  color: #E09B9B;
+}
+
+body.theme-dark .cal-day--partial {
+  background: #3D3722;
+  color: #D8C070;
+}
+
+body.theme-dark .cal-day--skipped {
+  background: #2A3330;
+  color: #9AA39E;
+}
+
+body.theme-dark .progress {
+  background: #3A4340;
+}
+
+body.theme-dark .habit-dot--none {
+  background: #5A645F;
+}
+
+/* Filas de gestión (tabla ya estilada globalmente) */
+.habits-manage .habit-dot {
+  margin-right: 8px;
+}
+
+/* Widget "Semana de hábitos" (home) */
+.wk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.wk-th {
+  padding: 4px 3px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.wk-name {
+  text-align: left;
+  padding: 4px 8px 4px 0;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.wk-td {
+  text-align: center;
+  padding: 2px;
+}
+
+.wk-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  border: 1px solid transparent;
+}
+
+.wk-cell--done {
+  background: #267568;
+  color: #FFFFFF;
+}
+
+.wk-cell--partial {
+  background: #FBF3DC;
+  color: #9A7D0A;
+}
+
+.wk-cell--skip {
+  background: #ECEFF1;
+  color: #5F6B72;
+}
+
+.wk-cell--missed {
+  background: #FDECEA;
+  color: var(--danger);
+}
+
+.wk-cell--future {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.wk-cell--off {
+  background: #F1F4F3;
+  color: #A8B2AD;
+}
+
+.wk-legend {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+body.theme-dark .wk-cell--partial {
+  background: #3D3722;
+  color: #D8C070;
+}
+
+body.theme-dark .wk-cell--skip {
+  background: #2A3330;
+  color: #9AA39E;
+}
+
+body.theme-dark .wk-cell--missed {
+  background: #3A2422;
+  color: #E09B9B;
+}
+
+body.theme-dark .wk-cell--off {
+  background: #1A1F1D;
+  color: #5A645F;
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   .header {
@@ -461,5 +851,19 @@ body.theme-dark .widget-position {
 
   .form-row > .form-group {
     min-width: auto;
+  }
+
+  .habit-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .habit-row__actions {
+    justify-content: flex-start;
+  }
+
+  .cal__weekdays,
+  .cal__days {
+    gap: 4px;
   }
 }

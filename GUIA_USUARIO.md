@@ -1,6 +1,6 @@
 # Life OS — Guía de usuario
 
-Guía breve para usar Life OS (MVP 0.1) en tu equipo. Todo funciona localmente y sin conexión a Internet.
+Guía breve para usar Life OS (Life OS 0.2) en tu equipo. Todo funciona localmente y sin conexión a Internet.
 
 ## Iniciar y detener
 
@@ -17,12 +17,12 @@ Abre `http://127.0.0.1:8000/` en el navegador. Para detener, cierra la terminal 
 
 ## Navegación
 
-La cabecera tiene cinco secciones: **Home**, **Proyectos**, **Tareas**, **Notas** y **Configuración**.
+La cabecera tiene seis secciones: **Home**, **Proyectos**, **Tareas**, **Notas**, **Hábitos** y **Configuración**.
 
 ### Home (dashboard)
 
 - **Resumen:** tareas pendientes, completadas, vencidas y proyectos activos.
-- **Widgets:** próximas tareas, proyectos activos, agregar tarea y agregar nota rápida.
+- **Widgets:** próximas tareas, proyectos activos, agregar tarea, agregar nota rápida, hábitos de hoy y semana de hábitos.
 - **Editar widgets:** el botón al final permite mostrar/ocultar widgets y reordenarlos con las flechas. "Guardar preferencias" conserva el orden al reiniciar.
 
 ### Tareas
@@ -50,6 +50,19 @@ La cabecera tiene cinco secciones: **Home**, **Proyectos**, **Tareas**, **Notas*
 - **Ver:** muestra la nota completa con sus etiquetas. El contenido se muestra como texto; nunca se ejecuta HTML ni JavaScript.
 - **Relaciones:** desde la API una nota puede vincularse a varios proyectos y tareas (`/api/v1/notes/{id}/projects` y `/tasks`), y las notas de un proyecto o tarea se consultan con `GET /api/v1/notes?project_id=...` o `?task_id=...`.
 
+### Hábitos
+
+- **Crear:** nombre obligatorio; descripción, categoría, color, fecha de inicio y frecuencia opcionales. La frecuencia es *Todos los días* o *Días específicos* (elige lunes a domingo).
+- **Modalidad:** binario (marcar hecho) o con cantidad objetivo (por ejemplo 5 km); si registras una cantidad igual o mayor a la meta, el día cuenta como cumplido.
+- **Hoy:** muestra los hábitos programados para hoy. Puedes *Marcar hecho*, *Omitir*, *Guardar* una cantidad o *Deshacer* un registro.
+- **Métricas:** racha actual, mejor racha, cumplimiento de la semana y del mes, y consistencia. Solo cuentan los días programados; si no hay datos suficientes se muestra "Sin datos" en lugar de 0 %.
+- **Calendario:** por hábito, con el estado de cada día del mes (cumplido, registrado sin completar, omitido, pendiente y no programado).
+- **Acciones:**
+  - *Pausar* / *Reactivar*: detiene temporalmente el seguimiento sin borrar nada.
+  - *Archivar* / *Restaurar*: guarda el hábito con su historial; es la operación preferida frente a eliminar.
+  - *Eliminar*: solo funciona si el hábito no tiene registros; si los tiene, archívalo.
+- **Reglas:** no se pueden registrar días futuros ni días que no estén programados; cada día tiene un único registro que puedes corregir o borrar.
+
 ### Configuración
 
 - **Tema:** Sistema (sigue el tema del sistema operativo), Claro u Oscuro.
@@ -63,12 +76,13 @@ La cabecera tiene cinco secciones: **Home**, **Proyectos**, **Tareas**, **Notas*
 
 El procedimiento completo de restauración y recuperación está en `RECUPERACION.md`.
 
-## Límites del MVP 0.1
+## Límites (versión 0.2)
 
 - Un solo usuario, local, sin nube ni sincronización.
 - Sin IA, notificaciones ni integraciones externas.
 - Las notas son texto plano (sin adjuntos ni formato enriquecido).
-- Las métricas son básicas (resumen e indicadores con fórmulas documentadas en `ARCHITECTURE.md`).
+- Las métricas son básicas (resumen e indicadores con fórmulas documentadas en `ARCHITECTURE.md` y `DATABASE.md`).
+- Los hábitos no tienen recordatorios ni gamificación: el seguimiento es manual.
 
 ## Problemas frecuentes
 

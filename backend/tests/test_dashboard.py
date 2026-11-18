@@ -4,16 +4,18 @@
 
 
 def test_list_widgets_defaults(client):
-    """El catálogo de widgets debe devolver los 4 widgets del MVP con defaults."""
+    """El catálogo debe devolver los widgets del MVP (Fase 6 + 7) con defaults."""
     response = client.get("/api/v1/dashboard/widgets")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 4
+    assert len(data) == 6
     ids = [w["widget_id"] for w in data]
     assert "upcoming_tasks" in ids
     assert "active_projects" in ids
     assert "quick_add_task" in ids
     assert "quick_add_note" in ids
+    assert "habits_today" in ids
+    assert "habits_week" in ids
     # Todos visibles por defecto
     assert all(w["is_visible"] is True for w in data)
     # Orden por posición

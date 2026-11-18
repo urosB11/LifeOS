@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 
 from app.db.session import get_db
 from app.modules.analytics.service import AnalyticsService
+from app.modules.habits.repository import HabitEntryRepository, HabitRepository
 from app.modules.projects.repository import ProjectRepository
 from app.modules.tasks.repository import TaskRepository
 
@@ -14,6 +15,8 @@ def _service(db = Depends(get_db)) -> AnalyticsService:
     return AnalyticsService(
         task_repo=TaskRepository(db),
         project_repo=ProjectRepository(db),
+        habit_repo=HabitRepository(db),
+        entry_repo=HabitEntryRepository(db),
         db=db,
     )
 
