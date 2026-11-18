@@ -2,6 +2,7 @@
 
 import { renderProjectsView } from "./projects.js";
 import { renderTasksView } from "./tasks.js";
+import { renderNotesView } from "./notes.js";
 
 const API_BASE = "/api/v1";
 const statusEl = document.getElementById("status");
@@ -45,6 +46,8 @@ async function route() {
     await renderProjectsView(viewEl, API_BASE);
   } else if (hash === "#/tasks") {
     await renderTasksView(viewEl, API_BASE);
+  } else if (hash === "#/notes") {
+    await renderNotesView(viewEl, API_BASE);
   } else {
     viewEl.innerHTML = `<p class="empty-state">Vista no encontrada.</p>`;
   }
