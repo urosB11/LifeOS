@@ -3,6 +3,8 @@
 import { renderProjectsView } from "./projects.js";
 import { renderTasksView } from "./tasks.js";
 import { renderNotesView } from "./notes.js";
+import { renderHomeView } from "./home.js";
+import { renderSettingsView } from "./settings.js";
 
 const API_BASE = "/api/v1";
 const statusEl = document.getElementById("status");
@@ -32,7 +34,7 @@ function renderHome() {
   viewEl.innerHTML = `
     <h1>Life OS</h1>
     <p class="subtitle">Centro de operaciones personal &mdash; MVP 0.1</p>
-    <p>Selecciona Proyectos o Tareas en la navegaci&oacute;n para comenzar.</p>
+    <p>Selecciona una secci&oacute;n en la navegaci&oacute;n para comenzar.</p>
   `;
 }
 
@@ -42,12 +44,16 @@ async function route() {
 
   if (hash === "#/" || hash === "") {
     renderHome();
+  } else if (hash === "#/home") {
+    await renderHomeView(viewEl, API_BASE);
   } else if (hash === "#/projects") {
     await renderProjectsView(viewEl, API_BASE);
   } else if (hash === "#/tasks") {
     await renderTasksView(viewEl, API_BASE);
   } else if (hash === "#/notes") {
     await renderNotesView(viewEl, API_BASE);
+  } else if (hash === "#/settings") {
+    await renderSettingsView(viewEl, API_BASE);
   } else {
     viewEl.innerHTML = `<p class="empty-state">Vista no encontrada.</p>`;
   }

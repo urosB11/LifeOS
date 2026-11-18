@@ -11,7 +11,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1 import health, notes, projects, tasks
+from app.api.v1 import dashboard, health, notes, projects, tasks
+from app.api.v1 import settings as settings_api
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -28,6 +29,8 @@ app.include_router(health.router, prefix=settings.api_v1_prefix)
 app.include_router(projects.router, prefix=settings.api_v1_prefix)
 app.include_router(tasks.router, prefix=settings.api_v1_prefix)
 app.include_router(notes.router, prefix=settings.api_v1_prefix)
+app.include_router(dashboard.router, prefix=settings.api_v1_prefix)
+app.include_router(settings_api.router, prefix=settings.api_v1_prefix)
 
 # --- Frontend static files (same origin, no CORS) ------------------------
 _frontend_dir = Path(__file__).resolve().parents[2] / "frontend"
