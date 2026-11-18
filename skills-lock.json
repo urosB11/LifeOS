@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "skills": {
+    "fastapi": {
+      "source": "fastapi/fastapi",
+      "commit": "821d37eec1b8ef4cd00d8fac73ecdb54aa94c847",
+      "sourceType": "github",
+      "skillPath": "fastapi/.agents/skills/fastapi/SKILL.md",
+      "computedHash": "c99ff38123d4af3a6cbc7f8cbb392b4c3424053a2eec2b2b174baae7bb7d18ee",
+      "installMode": "copy"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "commit": "e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "83485963700bcf11d5bf78118facb301676b69d918fee2e45a95e7f1a2840f6c",
+      "installMode": "copy"
+    }
+  }
+}
