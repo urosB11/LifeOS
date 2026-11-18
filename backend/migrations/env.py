@@ -11,8 +11,20 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Target metadata for autogenerate support.
-# Set to None in Fase 1 (no domain models yet). Update when models are added.
+# Las tablas de dominio se gestionan con migraciones versionadas; target_metadata
+# se deja None para no depender de autogenerate en esta fase.
 target_metadata = None
+
+
+def _get_database_url() -> str:
+    """Obtiene la URL de base de datos de la configuración de la app.
+
+    Así Alembic y la aplicación usan exactamente la misma base de datos
+    (DATABASE.md sección 11).
+    """
+    from app.core.config import get_settings
+
+    return get_settings().database_url
 
 
 def _enable_foreign_keys(dbapi_connection, connection_record):
@@ -23,13 +35,8 @@ def _enable_foreign_keys(dbapi_connection, connection_record):
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL and not an Engine,
-    though an Engine is acceptable here as well.  By skipping the Engine
-    creation we don't even need a DBAPI to be available.
-    """
-    url = config.get_main_option("sqlalchemy.url")
+    """Run migrations in 'offline' mode."""
+    url = _get_database_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -45,12 +52,14 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
-    In this scenario we need to create an Engine and associate a connection
-    with the context.  Foreign keys are enabled on every connection so that
-    referential integrity is enforced during migrations and runtime.
+    Usa la misma URL de base de datos que la aplicación para que las
+    migraciones se apliquen sobre la base real, no sobre una relativa a alembic.ini.
     """
+    configuration = config.get_section(config.config_ini_section, {})
+    configuration["sqlalchemy.url"] = _get_database_url()
+
     connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
