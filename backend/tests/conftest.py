@@ -4,15 +4,38 @@ Uses a temporary SQLite database so the user's personal database is never
 touched (AGENTS.md section 5, DATABASE.md section 11).
 """
 
+import atexit
 import os
+import shutil
 import tempfile
 
-import pytest
-from app.db.session import Base, _enable_foreign_keys
-from app.main import app
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event, text
-from sqlalchemy.orm import Session, sessionmaker
+# AGENTS.md section 5: tests must NEVER touch the personal database.
+# LIFEOS_DATA_DIR must be set BEFORE importing any app module, because the
+# global engine and the cached settings read it at import time. The backup
+# and restore endpoints use the app-global engine, so without this isolation
+# they would read and write %LOCALAPPDATA%\\LifeOS\\lifeos.db during test runs.
+_TEST_DATA_DIR = tempfile.mkdtemp(prefix="lifeos_test_data_")
+os.environ["LIFEOS_DATA_DIR"] = _TEST_DATA_DIR
+atexit.register(shutil.rmtree, _TEST_DATA_DIR, ignore_errors=True)
+
+import pytest  # noqa: E402
+from app.db.session import Base, _enable_foreign_keys, engine  # noqa: E402
+from app.main import app  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import create_engine, event, text  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _global_engine_schema():
+    """Create the schema on the app-global engine (isolated temp database).
+
+    The backup/restore endpoints operate on the app-global engine, so that
+    engine needs a real schema outside the per-test fixture database.
+    """
+    Base.metadata.create_all(bind=engine)
+    yield
+    engine.dispose()
 
 
 @pytest.fixture(scope="session")

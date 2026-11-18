@@ -1,8 +1,8 @@
 # Life OS — Roadmap de desarrollo
 
-**Estado:** planificación aprobada; Fase 0 cerrada y Fase 1 lista para iniciar
+**Estado:** Fases 1–6 completadas (MVP 0.1 en aceptación); siguientes fases pendientes de autorización
 **Versión:** 0.2
-**Fecha:** 17 de noviembre de 2026
+**Fecha:** 18 de noviembre de 2026
 **Relacionado con:** `VISION.md`, `REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATABASE.md`, `SECURITY.md` y `AGENTS.md`
 
 > El roadmap define orden y criterios de salida, no fechas. Cada fase entrega una porción ejecutable, integrada y probada. Autorizar una fase no autoriza automáticamente todas las siguientes.
@@ -182,4 +182,4 @@ Cada tarea queda terminada cuando:
 
 ## 8. Regla de avance
 
-La autorización actual permite iniciar la Fase 1 en OpenCode. No autoriza a ejecutar todas las fases en una sola corrida. OpenCode debe comenzar inspeccionando el directorio, comprobar el entorno, proponer un plan para Fase 1 y luego trabajar en incrementos pequeños sin sobrescribir archivos del usuario.
+Cada fase se ejecuta con autorización explícica del usuario; completar una fase no autoriza automáticamente la siguiente. OpenCode comienza inspeccionando el directorio, comprobando el entorno, proponiendo un plan para la fase y trabajando en incrementos pequeños sin sobrescribir archivos del usuario.

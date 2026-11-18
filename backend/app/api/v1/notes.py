@@ -92,10 +92,18 @@ def create_note(note_in: NoteCreate, service: NoteService = Depends(_note_servic
 def list_notes(
     search: str | None = None,
     tag: str | None = None,
+    project_id: str | None = None,
+    task_id: str | None = None,
     service: NoteService = Depends(_note_service),
 ):
-    """Lista notas con búsqueda simple y filtro opcional por etiqueta."""
-    return service.list(search=search, tag_id=tag)
+    """Lista notas con búsqueda simple y filtros por etiqueta, proyecto o tarea.
+
+    Los filtros `project_id` y `task_id` permiten consultar las notas de un
+    proyecto o una tarea desde el lado del vínculo (FR-NOTE-07).
+    """
+    return service.list(
+        search=search, tag_id=tag, project_id=project_id, task_id=task_id
+    )
 
 
 @router.get("/{note_id}", response_model=NoteOut)

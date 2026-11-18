@@ -66,3 +66,56 @@ def test_save_backup_endpoint(client):
     data = response.json()
     assert "backup_path" in data
     assert os.path.exists(data["backup_path"])
+
+
+def test_restore_endpoint_roundtrip(client):
+    """POST /api/v1/restore repone la base desde un backup (FR-DATA-05, criterio 13).
+
+    Flujo completo: datos -> backup por API -> borrado -> restore -> verificación
+    de que los datos vuelven. Usa el engine global, que en los tests está
+    aislado en un directorio temporal (nunca la base personal).
+    """
+    from app.db.session import SessionLocal, engine
+    from app.modules.projects.models import Project
+    from sqlalchemy import delete, select
+
+    # 1. Datos en la base activa (engine global aislado)
+    with SessionLocal() as db:
+        project = Project(name="Proyecto a restaurar", status="active")
+        db.add(project)
+        db.commit()
+        project_id = project.id
+
+    # 2. Backup por API
+    resp = client.get("/api/v1/backup")
+    assert resp.status_code == 200
+    backup_bytes = resp.content
+    assert len(backup_bytes) > 0
+
+    # 3. Borrar los datos
+    with SessionLocal() as db:
+        db.execute(delete(Project))
+        db.commit()
+        assert len(db.execute(select(Project)).scalars().all()) == 0
+
+    # 4. Restaurar desde el backup (cuerpo raw, sin multipart)
+    resp = client.post(
+        "/api/v1/restore",
+        content=backup_bytes,
+        headers={"Content-Type": "application/octet-stream"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["restored"] is True
+
+    # 5. Los datos restaurados vuelven a estar disponibles
+    with SessionLocal() as db:
+        projects = db.execute(select(Project)).scalars().all()
+        assert len(projects) == 1
+        assert projects[0].id == project_id
+        assert projects[0].name == "Proyecto a restaurar"
+
+    # Limpieza: no dejar datos en el engine global para otros tests
+    with SessionLocal() as db:
+        db.execute(delete(Project))
+        db.commit()
+    engine.dispose()

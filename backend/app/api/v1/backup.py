@@ -105,6 +105,10 @@ def restore_database(
     try:
         backup_sqlite_to_file(safety_path)
         shutil.move(tmp_path, active_db)
+        # Descartar las conexiones del pool: siguen apuntando al archivo
+        # reemplazado y leerían datos obsoletos. Al hacer dispose, la
+        # siguiente conexión abre la base restaurada.
+        engine.dispose()
     except Exception:
         _remove_temp(tmp_path)
         try:

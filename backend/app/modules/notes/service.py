@@ -55,8 +55,15 @@ class NoteService:
         self,
         search: str | None = None,
         tag_id: str | None = None,
+        project_id: str | None = None,
+        task_id: str | None = None,
     ):
-        return self.note_repo.list(search=search, tag_id=tag_id)
+        return self.note_repo.list(
+            search=search,
+            tag_id=tag_id,
+            project_id=project_id,
+            task_id=task_id,
+        )
 
     def update(self, note_id: str, note_in: NoteUpdate) -> Note | None:
         note = self.note_repo.get(note_id)

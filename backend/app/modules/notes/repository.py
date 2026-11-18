@@ -42,6 +42,8 @@ class NoteRepository:
         self,
         search: str | None = None,
         tag_id: str | None = None,
+        project_id: str | None = None,
+        task_id: str | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[Note]:
@@ -54,6 +56,16 @@ class NoteRepository:
             )
         if tag_id is not None:
             stmt = stmt.join(NoteTag).where(NoteTag.tag_id == tag_id)
+        if project_id is not None:
+            # Consultar las notas de un proyecto (FR-NOTE-07: vínculos desde
+            # ambos lados)
+            stmt = stmt.join(NoteProjectLink).where(
+                NoteProjectLink.project_id == project_id
+            )
+        if task_id is not None:
+            stmt = stmt.join(NoteTaskLink).where(
+                NoteTaskLink.task_id == task_id
+            )
         if conditions:
             stmt = stmt.where(and_(*conditions))
         stmt = stmt.order_by(Note.updated_at.desc()).offset(skip).limit(limit)

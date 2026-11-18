@@ -1,14 +1,27 @@
 # Life OS
 
-Life OS es un centro de operaciones personal, modular y local. Esta carpeta contiene la línea base aprobada de producto, arquitectura, datos, seguridad y desarrollo asistido por OpenCode.
+Life OS es un centro de operaciones personal, modular y local. Esta carpeta contiene la línea base aprobada de producto, arquitectura, datos, seguridad y desarrollo asistido con OpenCode.
 
 ## Estado actual
 
-- Planificación: Fase 0 cerrada.
-- Próximo trabajo: Fase 1 — fundaciones ejecutables.
-- Código funcional: todavía no implementado.
-- Context7: plugin de proyecto configurado en `opencode.json`; falta autenticarlo localmente.
-- Skills: cuatro skills locales incluidas; falta instalar `frontend-design` de Anthropic y `fastapi` oficial en el proyecto.
+- **Fases 1 a 5 completadas:** fundaciones ejecutables, proyectos y tareas, notas y etiquetas, Home/dashboard/Settings, y exportación JSON + backup/restauración + métricas básicas.
+- **Fase 6 (estabilización y aceptación del MVP) en curso:** migraciones verificadas desde base vacía y desde versión previa, aceptación de extremo a extremo (`backend/verify_acceptance.py`), corrección de defectos críticos de persistencia y revisión de accesibilidad/responsive.
+- **Código funcional:** backend FastAPI + frontend HTML/CSS/JavaScript nativo ejecutables en `127.0.0.1:8000`; 81 pruebas automatizadas.
+- **Context7:** plugin de proyecto configurado en `opencode.json`; falta autenticarlo localmente (`opencode mcp auth context7`).
+- **Skills:** cuatro skills locales incluidas; falta instalar `frontend-design` de Anthropic y `fastapi` oficial en el proyecto (`scripts/setup-opencode.ps1`).
+
+## Cómo ejecutar
+
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+.venv\Scripts\python.exe -m alembic upgrade head
+.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Abre `http://127.0.0.1:8000/`. Detalle completo en `backend/README.md`; uso diario en `GUIA_USUARIO.md`; recuperación de datos en `RECUPERACION.md`.
 
 ## Documentos
 
@@ -19,6 +32,9 @@ Life OS es un centro de operaciones personal, modular y local. Esta carpeta cont
 - `SECURITY.md`: modelo de confianza y controles.
 - `ROADMAP.md`: fases y entregables.
 - `AGENTS.md`: reglas de trabajo para OpenCode y otros agentes.
+- `GUIA_USUARIO.md`: guía de uso de la aplicación.
+- `RECUPERACION.md`: respaldo, restauración y recuperación de datos.
+- `CHANGELOG.md`: historial de cambios.
 - `OPENCODE_SETUP.md`: preparación del entorno y herramientas.
 - `OPENCODE_FIRST_TASK.md`: primer encargo para iniciar Fase 1.
 

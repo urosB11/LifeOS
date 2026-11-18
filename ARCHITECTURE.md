@@ -103,6 +103,7 @@ El frontend se sirve desde FastAPI y consume la API en el mismo origen. Así evi
 - Alembic gestiona migraciones.
 - SQLite conserva la fuente de verdad.
 - Las claves foráneas deben estar activadas en cada conexión.
+- La dependencia `get_db` es la frontera de transacción de cada request: confirma (`commit`) cuando la ruta termina correctamente y revierte si falla, de modo que el cambio de dominio y su evento se persisten juntos (DATABASE.md §6) y una request fallida no deja escrituras parciales.
 - No se accede a la base de datos desde JavaScript ni desde widgets.
 
 ### 4.5 Dirección visual y layout inicial
@@ -182,7 +183,7 @@ Prefijo: `/api/v1`.
 | `/health` | Estado básico del proceso y base de datos. |
 | `/tasks` | GET, POST; `/tasks/{id}` GET, PATCH, DELETE; completar/reabrir mediante operación de estado explícita. |
 | `/projects` | GET, POST; `/projects/{id}` GET, PATCH, DELETE restringido; archivar/restaurar/cambiar estado. |
-| `/notes` | GET con búsqueda/filtro, POST; `/notes/{id}` GET, PATCH, DELETE. |
+| `/notes` | GET con búsqueda, filtro por etiqueta, `project_id` o `task_id`, POST; `/notes/{id}` GET, PATCH, DELETE. |
 | `/notes/{id}/projects` | Consultar y modificar relaciones con proyectos. |
 | `/notes/{id}/tasks` | Consultar y modificar relaciones con tareas. |
 | `/tags` | Listar y crear etiquetas reutilizables. |

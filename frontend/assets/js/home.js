@@ -32,34 +32,45 @@ export async function renderHomeView(container, apiBase) {
   let editing = false;
 
   async function load() {
-    // Cargar resumen
-    const sumRes = await fetch(`${apiBase}/dashboard/summary`);
-    const summary = await sumRes.json();
+    try {
+      // Cargar resumen
+      const sumRes = await fetch(`${apiBase}/dashboard/summary`);
+      if (!sumRes.ok) throw new Error(`HTTP ${sumRes.status}`);
+      const summary = await sumRes.json();
 
-    summaryEl.innerHTML = `
-      <div class="summary-card">
-        <div class="summary-value">${summary.tasks.pending}</div>
-        <div class="summary-label">Tareas pendientes</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-value">${summary.tasks.completed}</div>
-        <div class="summary-label">Tareas completadas</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-value">${summary.tasks.overdue}</div>
-        <div class="summary-label">Tareas vencidas</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-value">${summary.projects.active}</div>
-        <div class="summary-label">Proyectos activos</div>
-      </div>
-    `;
+      summaryEl.innerHTML = `
+        <div class="summary-card">
+          <div class="summary-value">${summary.tasks.pending}</div>
+          <div class="summary-label">Tareas pendientes</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${summary.tasks.completed}</div>
+          <div class="summary-label">Tareas completadas</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${summary.tasks.overdue}</div>
+          <div class="summary-label">Tareas vencidas</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-value">${summary.projects.active}</div>
+          <div class="summary-label">Proyectos activos</div>
+        </div>
+      `;
 
-    // Cargar widgets
-    const wRes = await fetch(`${apiBase}/dashboard/widgets`);
-    widgets = await wRes.json();
-    renderWidgets();
-    renderConfig();
+      // Cargar widgets
+      const wRes = await fetch(`${apiBase}/dashboard/widgets`);
+      if (!wRes.ok) throw new Error(`HTTP ${wRes.status}`);
+      widgets = await wRes.json();
+      renderWidgets();
+      renderConfig();
+    } catch (error) {
+      summaryEl.innerHTML = "";
+      gridEl.innerHTML = `
+        <div class="widget-card">
+          <p class="empty-state">No se pudo cargar el dashboard. Verifica que el servicio est&eacute; activo.</p>
+        </div>
+      `;
+    }
   }
 
   function renderWidgets() {
@@ -107,8 +118,10 @@ export async function renderHomeView(container, apiBase) {
         contentEl.innerHTML = renderActiveProjects(projects);
       } else if (w.widget_id === "quick_add_task") {
         contentEl.innerHTML = renderQuickAddTask();
+        bindQuickAddTask();
       } else if (w.widget_id === "quick_add_note") {
         contentEl.innerHTML = renderQuickAddNote();
+        bindQuickAddNote();
       }
     } catch (e) {
       contentEl.innerHTML = `<p class="empty-state">Error cargando contenido.</p>`;
@@ -141,7 +154,7 @@ export async function renderHomeView(container, apiBase) {
   function renderQuickAddTask() {
     return `
       <div class="quick-add">
-        <input type="text" id="quick-task-title" placeholder="T&iacute;tulo de la nueva tarea">
+        <input type="text" id="quick-task-title" aria-label="T&iacute;tulo de la nueva tarea" placeholder="T&iacute;tulo de la nueva tarea">
         <button class="btn btn--primary btn--sm" id="quick-task-create">Crear tarea</button>
       </div>
     `;
@@ -150,10 +163,57 @@ export async function renderHomeView(container, apiBase) {
   function renderQuickAddNote() {
     return `
       <div class="quick-add">
-        <input type="text" id="quick-note-title" placeholder="T&iacute;tulo de la nueva nota">
+        <input type="text" id="quick-note-title" aria-label="T&iacute;tulo de la nueva nota" placeholder="T&iacute;tulo de la nueva nota">
         <button class="btn btn--primary btn--sm" id="quick-note-create">Crear nota</button>
       </div>
     `;
+  }
+
+  // Los botones quick-add se vinculan a sus elementos recién creados. Antes
+  // se adjuntaba un listener al contenedor persistente #app-view, que se
+  // acumulaba con cada navegación a Home y creaba registros duplicados.
+  function bindQuickAddTask() {
+    const btn = container.querySelector("#quick-task-create");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const input = container.querySelector("#quick-task-title");
+      const title = input.value.trim();
+      if (!title) return;
+      const res = await fetch(`${apiBase}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (res.ok) {
+        input.value = "";
+        await load();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Error creando tarea");
+      }
+    });
+  }
+
+  function bindQuickAddNote() {
+    const btn = container.querySelector("#quick-note-create");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const input = container.querySelector("#quick-note-title");
+      const title = input.value.trim();
+      if (!title) return;
+      const res = await fetch(`${apiBase}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, content: "" }),
+      });
+      if (res.ok) {
+        input.value = "";
+        await load();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Error creando nota");
+      }
+    });
   }
 
   function renderConfig() {
@@ -213,43 +273,8 @@ export async function renderHomeView(container, apiBase) {
     renderConfig();
   });
 
-  // Quick add task
-  container.addEventListener("click", async (e) => {
-    if (e.target && e.target.id === "quick-task-create") {
-      const input = container.querySelector("#quick-task-title");
-      const title = input.value.trim();
-      if (!title) return;
-      const res = await fetch(`${apiBase}/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      });
-      if (res.ok) {
-        input.value = "";
-        await load();
-      } else {
-        const err = await res.json();
-        alert(err.detail || "Error creando tarea");
-      }
-    }
-    if (e.target && e.target.id === "quick-note-create") {
-      const input = container.querySelector("#quick-note-title");
-      const title = input.value.trim();
-      if (!title) return;
-      const res = await fetch(`${apiBase}/notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content: "" }),
-      });
-      if (res.ok) {
-        input.value = "";
-        await load();
-      } else {
-        const err = await res.json();
-        alert(err.detail || "Error creando nota");
-      }
-    }
-  });
+  // Quick add: los handlers se vinculan en bindQuickAddTask/bindQuickAddNote
+  // (uno por elemento creado); no agregar listeners al contenedor persistente.
 
   window.appHome = {
     moveWidget(widgetId, direction) {

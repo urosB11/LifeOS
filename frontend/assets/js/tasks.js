@@ -6,15 +6,15 @@ export async function renderTasksView(container, apiBase) {
   container.innerHTML = `
     <div class="form-row" style="margin-bottom: 16px;">
       <div class="form-group" style="flex: 2; min-width: 260px;">
-        <label>T&iacute;tulo</label>
+        <label for="task-title">T&iacute;tulo</label>
         <input type="text" id="task-title" placeholder="T&iacute;tulo de la tarea">
       </div>
       <div class="form-group" style="flex: 1; min-width: 180px;">
-        <label>Proyecto (opcional)</label>
+        <label for="task-project">Proyecto (opcional)</label>
         <select id="task-project"><option value="">Ninguno</option></select>
       </div>
       <div class="form-group" style="flex: 1; min-width: 140px;">
-        <label>Prioridad</label>
+        <label for="task-priority">Prioridad</label>
         <select id="task-priority">
           <option value="">Ninguna</option>
           <option value="low">Baja</option>
@@ -23,20 +23,20 @@ export async function renderTasksView(container, apiBase) {
         </select>
       </div>
       <div class="form-group" style="flex: 1; min-width: 140px;">
-        <label>Vencimiento</label>
+        <label for="task-due">Vencimiento</label>
         <input type="date" id="task-due">
       </div>
       <button class="btn btn--primary" id="task-create-btn">Crear</button>
     </div>
 
-    <div style="margin-bottom: 12px; display:flex; gap: 8px; flex-wrap: wrap;">
-      <label style="font-size:0.9375rem; color:var(--text-secondary);">Filtrar:</label>
-      <select id="task-filter-status" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface);">
+    <div style="margin-bottom: 12px; display:flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+      <span style="font-size:0.9375rem; color:var(--text-secondary);">Filtrar:</span>
+      <select id="task-filter-status" aria-label="Filtrar por estado" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface);">
         <option value="">Todos los estados</option>
         <option value="pending">Pendientes</option>
         <option value="completed">Completadas</option>
       </select>
-      <select id="task-filter-project" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface);">
+      <select id="task-filter-project" aria-label="Filtrar por proyecto" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface);">
         <option value="">Todos los proyectos</option>
       </select>
     </div>
@@ -73,6 +73,8 @@ export async function renderTasksView(container, apiBase) {
     });
   }
 
+  let currentTasks = [];
+
   async function load() {
     const params = new URLSearchParams();
     if (filterStatus.value) params.set("status", filterStatus.value);
@@ -80,6 +82,7 @@ export async function renderTasksView(container, apiBase) {
 
     const res = await fetch(`${apiBase}/tasks?${params}`);
     const tasks = await res.json();
+    currentTasks = tasks;
 
     if (tasks.length === 0) {
       listEl.innerHTML = `<p class="empty-state">No hay tareas que coincidan con el filtro.</p>`;
@@ -90,6 +93,7 @@ export async function renderTasksView(container, apiBase) {
     projects.forEach(p => { projectMap[p.id] = p.name; });
 
     listEl.innerHTML = `
+      <div class="table-wrap">
       <table class="table">
         <thead>
           <tr>
@@ -105,7 +109,7 @@ export async function renderTasksView(container, apiBase) {
           ${tasks.map(t => `
             <tr id="task-row-${t.id}">
               <td><strong>${escapeHtml(t.title)}</strong></td>
-              <td>${escapeHtml(projectMap[t.project_id] || "&mdash;")}</td>
+              <td>${projectMap[t.project_id] ? escapeHtml(projectMap[t.project_id]) : "&mdash;"}</td>
               <td><span class="badge badge--status">${t.status}</span></td>
               <td>${t.priority ? `<span class="badge badge--priority-${t.priority}">${t.priority}</span>` : "&mdash;"}</td>
               <td>${t.due_date || "&mdash;"}</td>
@@ -114,7 +118,7 @@ export async function renderTasksView(container, apiBase) {
                   <button class="btn btn--secondary btn--sm" onclick="appTasks.toggleStatus('${t.id}', '${t.status}')">
                     ${t.status === "pending" ? "Completar" : "Reabrir"}
                   </button>
-                  <button class="btn btn--danger btn--sm" onclick="appTasks.deleteTask('${t.id}', '${escapeHtml(t.title)}')">
+                  <button class="btn btn--danger btn--sm" onclick="appTasks.deleteTask('${t.id}')">
                     Eliminar
                   </button>
                 </div>
@@ -123,6 +127,7 @@ export async function renderTasksView(container, apiBase) {
           `).join("")}
         </tbody>
       </table>
+      </div>
     `;
   }
 
@@ -173,7 +178,9 @@ export async function renderTasksView(container, apiBase) {
       }
     },
 
-    async deleteTask(id, title) {
+    async deleteTask(id) {
+      const task = currentTasks.find(t => t.id === id);
+      const title = task ? task.title : "";
       if (!confirm(`¿Eliminar la tarea "${title}"?`)) return;
 
       const res = await fetch(`${apiBase}/tasks/${id}`, {

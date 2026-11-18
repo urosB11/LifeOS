@@ -35,5 +35,10 @@ src = ["app"]
 select = ["E", "F", "I", "N", "UP"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+# LIFEOS_DATA_DIR se fija antes de importar app.* (aislamiento de la base
+# personal), por lo que los imports del conftest van después de código.
+"tests/conftest.py" = ["E402"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -26,25 +26,24 @@ async function checkHealth() {
 
 function setActiveNav(path) {
   navLinks.forEach((link) => {
-    link.classList.toggle("active", link.getAttribute("href") === path);
+    const active = link.getAttribute("href") === path;
+    link.classList.toggle("active", active);
+    if (active) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
   });
-}
-
-function renderHome() {
-  viewEl.innerHTML = `
-    <h1>Life OS</h1>
-    <p class="subtitle">Centro de operaciones personal &mdash; MVP 0.1</p>
-    <p>Selecciona una secci&oacute;n en la navegaci&oacute;n para comenzar.</p>
-  `;
 }
 
 async function route() {
   const hash = location.hash || "#/";
-  setActiveNav(hash);
+  // "#/home" es un alias legible de "#/" (el dashboard real)
+  setActiveNav(hash === "#/home" ? "#/" : hash);
 
-  if (hash === "#/" || hash === "") {
-    renderHome();
-  } else if (hash === "#/home") {
+  if (hash === "#/" || hash === "" || hash === "#/home") {
+    // Home abre el dashboard con widgets (Fase 4); el stub anterior dejaba
+    // el dashboard inalcanzable desde la navegación.
     await renderHomeView(viewEl, API_BASE);
   } else if (hash === "#/projects") {
     await renderProjectsView(viewEl, API_BASE);

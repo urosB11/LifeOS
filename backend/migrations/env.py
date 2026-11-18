@@ -1,6 +1,6 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool, event, text
+from sqlalchemy import engine_from_config, pool, event
 from alembic import context
 
 # Alembic configuration object, provides access to values in alembic.ini.
@@ -66,9 +66,15 @@ def run_migrations_online() -> None:
 
     event.listen(connectable, "connect", _enable_foreign_keys)
 
+    # IMPORTANTE: no ejecutar ninguna sentencia (ni PRAGMA ni SELECT) sobre la
+    # conexión antes de context.configure(). Cualquier sentencia deja la
+    # conexión "en transacción" a ojos de SQLAlchemy, Alembic detecta
+    # _in_external_transaction=True y begin_transaction() queda como
+    # nullcontext(): Alembic nunca confirma alembic_version ni el DDL
+    # posterior al primer INSERT se pierde al cerrar la conexión
+    # (upgrade head reportaba éxito sin registrar la versión).
+    # Las claves foráneas ya se habilitan en el evento "connect" de arriba.
     with connectable.connect() as connection:
-        connection.execute(text("PRAGMA foreign_keys = ON"))
-
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

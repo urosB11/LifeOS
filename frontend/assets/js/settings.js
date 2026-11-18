@@ -8,7 +8,7 @@ export async function renderSettingsView(container, apiBase) {
     <div class="card" style="margin-bottom: 24px;">
       <h3>Apariencia</h3>
       <div class="form-group" style="margin-bottom: 16px;">
-        <label>Tema</label>
+        <label for="setting-theme">Tema</label>
         <select id="setting-theme">
           <option value="system">Sistema</option>
           <option value="light">Claro</option>
@@ -21,7 +21,7 @@ export async function renderSettingsView(container, apiBase) {
     <div class="card" style="margin-bottom: 24px;">
       <h3>Zona horaria</h3>
       <div class="form-group" style="margin-bottom: 16px;">
-        <label>Zona horaria</label>
+        <label for="setting-timezone">Zona horaria</label>
         <input type="text" id="setting-timezone" placeholder="Ej. America/Argentina/Cordoba">
         <p style="font-size:0.875rem;color:var(--text-secondary);margin-top:4px;">Se usa para mostrar fechas y determinar tareas vencidas.</p>
       </div>
@@ -144,13 +144,19 @@ export async function renderSettingsView(container, apiBase) {
   await load();
 }
 
+let currentTheme = "system";
+
 function applyTheme(theme) {
-  if (theme === "dark") {
-    document.body.classList.add("theme-dark");
-  } else {
-    document.body.classList.remove("theme-dark");
-  }
+  currentTheme = theme || "system";
+  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const useDark = currentTheme === "dark" || (currentTheme === "system" && prefersDark);
+  document.body.classList.toggle("theme-dark", useDark);
 }
+
+// "Sistema" sigue la preferencia del SO en tiempo real
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (currentTheme === "system") applyTheme("system");
+});
 
 // Aplicar tema guardado al cargar el módulo
 fetch("/api/v1/settings/theme")

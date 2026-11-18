@@ -190,3 +190,54 @@ def test_note_survives_task_deletion(client):
     # El vínculo se quitó
     r = client.get(f"/api/v1/notes/{note_id}/tasks")
     assert len(r.json()) == 0
+
+
+def test_notes_visible_from_project_and_task_sides(client):
+    """FR-NOTE-07 / criterio 6: las notas se consultan desde ambos lados."""
+    proj = client.post("/api/v1/projects", json={"name": "Proyecto con notas"})
+    project_id = proj.json()["id"]
+
+    task = client.post(
+        "/api/v1/tasks", json={"title": "Tarea con notas", "project_id": project_id}
+    )
+    task_id = task.json()["id"]
+
+    note_a = client.post(
+        "/api/v1/notes", json={"title": "Nota del proyecto", "content": "a"}
+    ).json()
+    note_b = client.post(
+        "/api/v1/notes", json={"title": "Nota de la tarea", "content": "b"}
+    ).json()
+    note_c = client.post(
+        "/api/v1/notes", json={"title": "Nota suelta", "content": "c"}
+    ).json()
+
+    client.post(f"/api/v1/notes/{note_a['id']}/projects", json={"id": project_id})
+    client.post(f"/api/v1/notes/{note_b['id']}/tasks", json={"id": task_id})
+
+    # Lado proyecto: solo la nota vinculada al proyecto
+    r = client.get(f"/api/v1/notes?project_id={project_id}")
+    assert r.status_code == 200
+    titles = [n["title"] for n in r.json()]
+    assert titles == ["Nota del proyecto"]
+
+    # Lado tarea: solo la nota vinculada a la tarea
+    r = client.get(f"/api/v1/notes?task_id={task_id}")
+    assert r.status_code == 200
+    titles = [n["title"] for n in r.json()]
+    assert titles == ["Nota de la tarea"]
+
+    # Sin filtros: todas las notas
+    r = client.get("/api/v1/notes")
+    assert len(r.json()) == 3
+
+    # Proyecto sin notas: lista vacía
+    empty_proj = client.post("/api/v1/projects", json={"name": "Vacío"})
+    r = client.get(f"/api/v1/notes?project_id={empty_proj.json()['id']}")
+    assert r.status_code == 200
+    assert r.json() == []
+
+    # La nota suelta no aparece en ningún vínculo
+    assert note_c["id"] not in [n["id"] for n in client.get(
+        f"/api/v1/notes?project_id={project_id}"
+    ).json()]

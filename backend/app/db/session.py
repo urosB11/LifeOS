@@ -50,14 +50,27 @@ SessionLocal = sessionmaker(
 
 
 def get_db() -> Session:
-    """Yield a database session and ensure it is closed afterwards.
+    """Yield a database session and settle the request transaction.
 
-    Intended for use as a FastAPI dependency:
-        db: Session = Depends(get_db)
+    This dependency is the transaction boundary for API requests (DATABASE.md
+    section 6: domain change and activity event confirmed together):
+
+    - commit when the route finishes successfully, so writes actually persist;
+    - rollback when the route raises, so a failed request leaves no partial
+      data behind;
+    - close the session either way.
+
+    Without the commit, Session.close() discarded every write and the API
+    appeared to succeed while nothing persisted (found in Fase 6 acceptance).
     """
     db = SessionLocal()
     try:
         yield db
+    except BaseException:
+        db.rollback()
+        raise
+    else:
+        db.commit()
     finally:
         db.close()
 
