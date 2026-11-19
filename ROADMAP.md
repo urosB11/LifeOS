@@ -1,6 +1,6 @@
 # Life OS — Roadmap de desarrollo
 
-**Estado:** Fases 1–6 completadas (MVP 0.1 en aceptación); siguientes fases pendientes de autorización
+**Estado:** Fases 1–7 completadas (MVP 0.1 aceptado + Habit Tracker 0.2); siguientes fases pendientes de autorización
 **Versión:** 0.2
 **Fecha:** 18 de noviembre de 2026
 **Relacionado con:** `VISION.md`, `REQUIREMENTS.md`, `ARCHITECTURE.md`, `DATABASE.md`, `SECURITY.md` y `AGENTS.md`

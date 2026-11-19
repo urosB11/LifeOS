@@ -4,9 +4,9 @@ Life OS es un centro de operaciones personal, modular y local. Esta carpeta cont
 
 ## Estado actual
 
-- **Fases 1 a 5 completadas:** fundaciones ejecutables, proyectos y tareas, notas y etiquetas, Home/dashboard/Settings, y exportación JSON + backup/restauración + métricas básicas.
-- **Fase 6 (estabilización y aceptación del MVP) en curso:** migraciones verificadas desde base vacía y desde versión previa, aceptación de extremo a extremo (`backend/verify_acceptance.py`), corrección de defectos críticos de persistencia y revisión de accesibilidad/responsive.
-- **Código funcional:** backend FastAPI + frontend HTML/CSS/JavaScript nativo ejecutables en `127.0.0.1:8000`; 81 pruebas automatizadas.
+- **Fases 1 a 6 completadas:** fundaciones ejecutables, proyectos y tareas, notas y etiquetas, Home/dashboard/Settings, exportación JSON + backup/restauración + métricas básicas, y estabilización/aceptación del MVP (aceptación de extremo a extremo, persistencia, accesibilidad/responsive).
+- **Fase 7 (Habit Tracker — Life OS 0.2) completada:** módulo de hábitos con estados, registros diarios, métricas deterministas, vistas Hábitos + Home, widgets de hábitos y verificación ampliada (`backend/verify_acceptance.py`, 23 checks).
+- **Código funcional:** backend FastAPI + frontend HTML/CSS/JavaScript nativo ejecutables en `127.0.0.1:8000`; 134 pruebas automatizadas.
 - **Context7:** plugin de proyecto configurado en `opencode.json`; falta autenticarlo localmente (`opencode mcp auth context7`).
 - **Skills:** cuatro skills locales incluidas; falta instalar `frontend-design` de Anthropic y `fastapi` oficial en el proyecto (`scripts/setup-opencode.ps1`).
 
