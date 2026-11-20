@@ -642,38 +642,44 @@ body.theme-dark .habit-row--done {
 }
 
 .cal {
-  max-width: 340px;
+  max-width: 300px;
   margin: 0 auto;
 }
 
 .cal__weekdays,
 .cal__days {
   display: grid;
-  grid-template-columns: repeat(7, 36px);
-  gap: 4px;
+  grid-template-columns: repeat(7, 32px);
+  gap: 3px;
   justify-content: center;
 }
 
 .cal__weekdays {
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 
 .cal__weekdays span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-secondary);
 }
 
 .cal-day {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius);
-  font-size: 0.75rem;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.6875rem;
+  font-weight: 500;
   border: 1px solid transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .cal-day--empty {
@@ -713,8 +719,14 @@ body.theme-dark .habit-row--done {
 
 .cal-day--today {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
   font-weight: 700;
+  background: var(--accent-subtle);
+}
+
+.cal-day:hover:not(.cal-day--empty):not(.cal-day--done) {
+  background: var(--surface-hover);
+  border-color: var(--border);
 }
 
 .cal-legend {
@@ -911,14 +923,14 @@ body.theme-dark .habit-row--done {
   .cal__weekdays,
   .cal__days {
     grid-template-columns: repeat(7, 1fr);
-    gap: 3px;
+    gap: 2px;
   }
 
   .cal-day {
     width: auto;
-    height: 32px;
+    height: 28px;
     aspect-ratio: 1;
-    font-size: 0.6875rem;
+    font-size: 0.625rem;
   }
 
   .toast-container {
