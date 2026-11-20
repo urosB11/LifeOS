@@ -1,12 +1,20 @@
-// Life OS — vista de Configuración
+// Life OS — vista de Configuración (Fase 8C)
+//
+// Preferencias, temas y configuración general. Usa componentes de 8A.
+
+import { showToast } from "./app.js";
 
 export async function renderSettingsView(container, apiBase) {
   container.innerHTML = `
-    <h1>Configuraci&oacute;n</h1>
-    <p class="subtitle">Preferencias de la aplicaci&oacute;n</p>
+    <div class="section-header">
+      <div>
+        <h1>Configuraci&oacute;n</h1>
+        <p class="subtitle">Preferencias de la aplicaci&oacute;n</p>
+      </div>
+    </div>
 
     <div class="card" style="margin-bottom: 24px;">
-      <h3>Apariencia</h3>
+      <h3 style="margin-top:0;">Apariencia</h3>
       <div class="form-group" style="margin-bottom: 16px;">
         <label for="setting-theme">Tema</label>
         <select id="setting-theme">
@@ -14,23 +22,32 @@ export async function renderSettingsView(container, apiBase) {
           <option value="light">Claro</option>
           <option value="dark">Oscuro</option>
         </select>
-        <p style="font-size:0.875rem;color:var(--text-secondary);margin-top:4px;">El tema oscuro se aplica a toda la interfaz.</p>
+        <p class="text-secondary" style="font-size:0.875rem; margin-top:4px;">
+          El tema oscuro se aplica a toda la interfaz.
+        </p>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 24px;">
-      <h3>Zona horaria</h3>
+      <h3 style="margin-top:0;">Zona horaria</h3>
       <div class="form-group" style="margin-bottom: 16px;">
         <label for="setting-timezone">Zona horaria</label>
         <input type="text" id="setting-timezone" placeholder="Ej. America/Argentina/Cordoba">
-        <p style="font-size:0.875rem;color:var(--text-secondary);margin-top:4px;">Se usa para mostrar fechas y determinar tareas vencidas.</p>
+        <p class="text-secondary" style="font-size:0.875rem; margin-top:4px;">
+          Se usa para mostrar fechas y determinar tareas vencidas.
+        </p>
       </div>
     </div>
 
     <div class="card">
-      <h3>Preferencias del dashboard</h3>
+      <h3 style="margin-top:0;">Preferencias del dashboard</h3>
       <p class="subtitle">Administra la visibilidad y el orden de los widgets de Home.</p>
-      <div id="dashboard-widgets-config" style="margin-top: 12px;"></div>
+      <div id="dashboard-widgets-config" style="margin-top: 12px;">
+        <div class="empty-state">
+          <div class="empty-state__icon" aria-hidden="true">&#8987;</div>
+          <p class="empty-state__title">Cargando&hellip;</p>
+        </div>
+      </div>
       <button class="btn btn--primary" id="settings-save-widgets" style="margin-top: 12px;">Guardar widgets</button>
     </div>
   `;
@@ -43,25 +60,50 @@ export async function renderSettingsView(container, apiBase) {
   let widgets = [];
 
   async function load() {
-    // Tema
-    const themeRes = await fetch(`${apiBase}/settings/theme`);
-    const themeData = await themeRes.json();
-    themeSelect.value = themeData.theme || "system";
+    try {
+      // Tema
+      const themeRes = await fetch(`${apiBase}/settings/theme`);
+      if (!themeRes.ok) throw new Error(`HTTP ${themeRes.status}`);
+      const themeData = await themeRes.json();
+      themeSelect.value = themeData.theme || "system";
 
-    // Zona horaria
-    const tzRes = await fetch(`${apiBase}/settings/timezone`);
-    const tzData = await tzRes.json();
-    timezoneInput.value = tzData.timezone || "America/Argentina/Cordoba";
+      // Zona horaria
+      const tzRes = await fetch(`${apiBase}/settings/timezone`);
+      if (tzRes.ok) {
+        const tzData = await tzRes.json();
+        timezoneInput.value = tzData.timezone || "America/Argentina/Cordoba";
+      }
 
-    // Widgets
-    const wRes = await fetch(`${apiBase}/dashboard/widgets`);
-    widgets = await wRes.json();
-    renderWidgetsConfig();
+      // Widgets
+      const wRes = await fetch(`${apiBase}/dashboard/widgets`);
+      if (!wRes.ok) throw new Error(`HTTP ${wRes.status}`);
+      widgets = await wRes.json();
+      renderWidgetsConfig();
+    } catch (error) {
+      widgetsConfigEl.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
+          <p class="empty-state__title">Error al cargar</p>
+          <p class="empty-state__text">No se pudieron cargar las preferencias.</p>
+        </div>
+      `;
+    }
   }
 
   function renderWidgetsConfig() {
+    if (widgets.length === 0) {
+      widgetsConfigEl.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state__icon" aria-hidden="true">&#128193;</div>
+          <p class="empty-state__title">Sin widgets</p>
+          <p class="empty-state__text">No hay widgets configurables.</p>
+        </div>
+      `;
+      return;
+    }
     const sorted = [...widgets].sort((a, b) => a.position - b.position);
     widgetsConfigEl.innerHTML = `
+      <div class="table-wrap">
       <table class="table">
         <thead>
           <tr><th>Widget</th><th>Visible</th><th>Orden</th></tr>
@@ -69,7 +111,7 @@ export async function renderSettingsView(container, apiBase) {
         <tbody>
           ${sorted.map((w, idx) => `
             <tr>
-              <td><strong>${w.label}</strong><br><small style="color:var(--text-secondary);">${w.description}</small></td>
+              <td><strong>${w.label}</strong><br><small class="text-secondary">${w.description}</small></td>
               <td>
                 <input type="checkbox" ${w.is_visible ? "checked" : ""} data-widget="${w.widget_id}">
               </td>
@@ -80,32 +122,44 @@ export async function renderSettingsView(container, apiBase) {
           `).join("")}
         </tbody>
       </table>
+      </div>
     `;
   }
 
   themeSelect.addEventListener("change", async () => {
-    const res = await fetch(`${apiBase}/settings/theme`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: themeSelect.value }),
-    });
-    if (res.ok) {
-      applyTheme(themeSelect.value);
-    } else {
-      const err = await res.json();
-      alert(err.detail || "Error guardando tema");
+    try {
+      const res = await fetch(`${apiBase}/settings/theme`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ theme: themeSelect.value }),
+      });
+      if (res.ok) {
+        applyTheme(themeSelect.value);
+        showToast("Tema actualizado", "success");
+      } else {
+        const err = await res.json();
+        showToast(err.detail || "Error guardando tema", "error");
+      }
+    } catch (error) {
+      showToast("Error de conexión", "error");
     }
   });
 
   timezoneInput.addEventListener("change", async () => {
-    const res = await fetch(`${apiBase}/settings/timezone`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ timezone: timezoneInput.value }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      alert(err.detail || "Error guardando zona horaria");
+    try {
+      const res = await fetch(`${apiBase}/settings/timezone`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timezone: timezoneInput.value }),
+      });
+      if (res.ok) {
+        showToast("Zona horaria guardada", "success");
+      } else {
+        const err = await res.json();
+        showToast(err.detail || "Error guardando zona horaria", "error");
+      }
+    } catch (error) {
+      showToast("Error de conexión", "error");
     }
   });
 
@@ -117,7 +171,6 @@ export async function renderSettingsView(container, apiBase) {
       if (idx === 0) return;
       const checkbox = row.querySelector("input[type=checkbox]");
       const positionInput = row.querySelector("input[type=number]");
-      // Obtener el widget_id del checkbox
       const widgetId = checkbox.getAttribute("data-widget");
       prefs.push({
         widget_id: widgetId,
@@ -126,18 +179,27 @@ export async function renderSettingsView(container, apiBase) {
       });
     });
 
-    const res = await fetch(`${apiBase}/dashboard/widgets`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(prefs),
-    });
+    saveWidgetsBtn.disabled = true;
+    saveWidgetsBtn.textContent = "Guardando…";
+    try {
+      const res = await fetch(`${apiBase}/dashboard/widgets`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prefs),
+      });
 
-    if (res.ok) {
-      await load();
-      alert("Preferencias guardadas");
-    } else {
-      const err = await res.json();
-      alert(err.detail || "Error guardando widgets");
+      if (res.ok) {
+        showToast("Preferencias guardadas", "success");
+        await load();
+      } else {
+        const err = await res.json();
+        showToast(err.detail || "Error guardando widgets", "error");
+      }
+    } catch (error) {
+      showToast("Error de conexión", "error");
+    } finally {
+      saveWidgetsBtn.disabled = false;
+      saveWidgetsBtn.textContent = "Guardar widgets";
     }
   });
 
@@ -169,9 +231,3 @@ fetch("/api/v1/settings/theme")
   });
 
 export { applyTheme };
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}

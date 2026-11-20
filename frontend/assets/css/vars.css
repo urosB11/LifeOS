@@ -1,0 +1,126 @@
+/* Life OS — tokens de diseño (Fase 8A)
+ * Dark es la identidad visual principal; light y system son alternativas.
+ * Estos tokens reemplazan los valores hardcodeados en app.css sin eliminar
+ * clases existentes. Cualquier componente nuevo debe usar estas variables.
+ */
+
+:root {
+  /* --- Paleta dark (principal) --- */
+  --bg: #0F1412;
+  --surface: #1A211E;
+  --surface-raised: #232A28;
+  --surface-hover: #2A3330;
+  --text: #E8ECEA;
+  --text-secondary: #9AA39E;
+  --text-muted: #6B7570;
+  --border: #3A4340;
+  --border-subtle: #2A3330;
+  --accent: #3A9B8C;
+  --accent-hover: #4AAC9B;
+  --accent-subtle: #1A2E2A;
+  --danger: #E09B9B;
+  --danger-subtle: #3A2422;
+  --success: #5BBF7A;
+  --success-subtle: #1A2E20;
+  --warning: #D8C070;
+  --warning-subtle: #3D3722;
+  --info: #5B9BD5;
+  --info-subtle: #1A2433;
+
+  /* --- Geometría --- */
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-lg: 12px;
+  --spacing: 16px;
+  --spacing-sm: 8px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* --- Tipografía --- */
+  --font: system-ui, -apple-system, Segoe UI, Aptos, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.75rem;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* --- Sombras --- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
+
+  /* --- Transiciones --- */
+  --transition-fast: 100ms ease;
+  --transition: 150ms ease;
+  --transition-slow: 200ms ease;
+
+  /* --- Breakpoints (referencia; los media queries usan valores literales) --- */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+
+  /* --- Layout --- */
+  --header-height: 56px;
+  --sidebar-width: 224px;
+  --content-max-width: 1440px;
+}
+
+/* --- Paleta light (alternativa) --- */
+body.theme-light {
+  --bg: #F5F7F6;
+  --surface: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-hover: #F0F3F2;
+  --text: #1F2926;
+  --text-secondary: #66736E;
+  --text-muted: #9AA39E;
+  --border: #E1E7E4;
+  --border-subtle: #F0F3F2;
+  --accent: #267568;
+  --accent-hover: #1E5B50;
+  --accent-subtle: #E8F0EE;
+  --danger: #9B3A3A;
+  --danger-subtle: #FDECEA;
+  --success: #2F7D52;
+  --success-subtle: #E9F3EC;
+  --warning: #9A7D0A;
+  --warning-subtle: #FBF3DC;
+  --info: #2E5E8C;
+  --info-subtle: #E8F0F8;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+/* Compatibilidad: theme-dark explícito (mismo resultado que :root) */
+body.theme-dark {
+  --bg: #0F1412;
+  --surface: #1A211E;
+  --surface-raised: #232A28;
+  --surface-hover: #2A3330;
+  --text: #E8ECEA;
+  --text-secondary: #9AA39E;
+  --text-muted: #6B7570;
+  --border: #3A4340;
+  --border-subtle: #2A3330;
+  --accent: #3A9B8C;
+  --accent-hover: #4AAC9B;
+  --accent-subtle: #1A2E2A;
+  --danger: #E09B9B;
+  --danger-subtle: #3A2422;
+  --success: #5BBF7A;
+  --success-subtle: #1A2E20;
+  --warning: #D8C070;
+  --warning-subtle: #3D3722;
+  --info: #5B9BD5;
+  --info-subtle: #1A2433;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
+}

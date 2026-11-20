@@ -23,7 +23,7 @@ Si hay una contradicción, no la resuelvas silenciosamente: identifica los docum
 
 ## 2. Autonomía y flujo de trabajo
 
-La autorización vigente permite iniciar la Fase 1 del `ROADMAP.md`. No autoriza al agente a ejecutar el roadmap entero, agregar funciones futuras ni realizar acciones externas.
+Las fases 1–7 del `ROADMAP.md` están completadas (MVP 0.1 aceptado + Habit Tracker 0.2). La autorización vigente permite iniciar la **Fase 8 (UX/UI Redesign)** según las decisiones aprobadas por el propietario. No autoriza al agente a ejecutar el roadmap entero, agregar funciones futuras ni realizar acciones externas.
 
 Para cada tarea:
 

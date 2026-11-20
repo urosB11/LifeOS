@@ -9,19 +9,164 @@ import { renderSettingsView } from "./settings.js";
 
 const API_BASE = "/api/v1";
 const statusEl = document.getElementById("status");
+const statusMobileEl = document.getElementById("status-mobile");
 const viewEl = document.getElementById("app-view");
 const navLinks = document.querySelectorAll(".nav__link");
+
+// --- Sidebar (Fase 8B) ------------------------------------------------------
+const sidebar = document.getElementById("sidebar");
+const sidebarOverlay = document.getElementById("sidebar-overlay");
+const menuBtn = document.getElementById("menu-btn");
+const sidebarClose = document.getElementById("sidebar-close");
+
+function openSidebar() {
+  sidebar.classList.add("open");
+  sidebarOverlay.classList.add("visible");
+  menuBtn.setAttribute("aria-expanded", "true");
+  document.body.style.overflow = "hidden";
+}
+
+function closeSidebar() {
+  sidebar.classList.remove("open");
+  sidebarOverlay.classList.remove("visible");
+  menuBtn.setAttribute("aria-expanded", "false");
+  document.body.style.overflow = "";
+}
+
+menuBtn.addEventListener("click", () => {
+  if (sidebar.classList.contains("open")) {
+    closeSidebar();
+  } else {
+    openSidebar();
+  }
+});
+
+sidebarClose.addEventListener("click", closeSidebar);
+sidebarOverlay.addEventListener("click", closeSidebar);
+
+// Cerrar sidebar al navegar (en móvil)
+navLinks.forEach((link) => {
+  link.addEventListener("click", () => {
+    if (window.innerWidth <= 768) closeSidebar();
+  });
+});
+
+// Cerrar sidebar con Escape
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && sidebar.classList.contains("open")) {
+    closeSidebar();
+  }
+});
+
+// --- Toast (Fase 8A) -------------------------------------------------------
+let toastContainer = null;
+
+function ensureToastContainer() {
+  if (!toastContainer) {
+    toastContainer = document.createElement("div");
+    toastContainer.className = "toast-container";
+    toastContainer.setAttribute("role", "status");
+    toastContainer.setAttribute("aria-live", "polite");
+    document.body.appendChild(toastContainer);
+  }
+  return toastContainer;
+}
+
+export function showToast(message, type = "info", duration = 4000) {
+  const container = ensureToastContainer();
+  const toast = document.createElement("div");
+  toast.className = `toast toast--${type}`;
+  toast.innerHTML = `
+    <span>${message}</span>
+    <button class="toast__close" aria-label="Cerrar">&times;</button>
+  `;
+  const closeBtn = toast.querySelector(".toast__close");
+  closeBtn.addEventListener("click", () => toast.remove());
+  container.appendChild(toast);
+  if (duration > 0) {
+    setTimeout(() => {
+      if (toast.parentNode) toast.remove();
+    }, duration);
+  }
+}
+
+// --- Confirmación modal (Fase 8A + 8D: focus trap) --------------------------
+export function showConfirm({ title, text, confirmLabel = "Confirmar", cancelLabel = "Cancelar", danger = false }) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <h2 class="modal__title" id="modal-title">${title}</h2>
+        <p class="modal__text">${text}</p>
+        <div class="modal__actions">
+          <button class="btn btn--secondary" data-action="cancel">${cancelLabel}</button>
+          <button class="btn ${danger ? "btn--danger" : "btn--primary"}" data-action="confirm">${confirmLabel}</button>
+        </div>
+      </div>
+    `;
+    const previouslyFocused = document.activeElement;
+    function close(result) {
+      overlay.remove();
+      document.removeEventListener("keydown", onKey, true);
+      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+      resolve(result);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close(false);
+        return;
+      }
+      // Focus trap: mantener el foco dentro del modal
+      if (e.key === "Tab") {
+        const focusable = overlay.querySelectorAll("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])");
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close(false);
+      const action = e.target.closest("[data-action]")?.dataset.action;
+      if (action === "confirm") close(true);
+      if (action === "cancel") close(false);
+    });
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-action="confirm"]').focus();
+  });
+}
 
 async function checkHealth() {
   try {
     const response = await fetch(`${API_BASE}/health`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     await response.json();
-    statusEl.textContent = "Servicio activo";
-    statusEl.style.color = "#267568";
+    if (statusEl) {
+      statusEl.textContent = "Servicio activo";
+      statusEl.style.color = "var(--success)";
+    }
+    if (statusMobileEl) {
+      statusMobileEl.textContent = "Servicio activo";
+      statusMobileEl.style.color = "var(--success)";
+    }
   } catch (error) {
-    statusEl.textContent = "Servicio no disponible";
-    statusEl.style.color = "#9B3A3A";
+    if (statusEl) {
+      statusEl.textContent = "Servicio no disponible";
+      statusEl.style.color = "var(--danger)";
+    }
+    if (statusMobileEl) {
+      statusMobileEl.textContent = "Servicio no disponible";
+      statusMobileEl.style.color = "var(--danger)";
+    }
   }
 }
 

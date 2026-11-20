@@ -1,68 +1,78 @@
-// Life OS — vista Home (dashboard configurable)
+// Life OS — vista Home (dashboard configurable) — Fase 8B
+//
+// Centro de control adaptativo: resumen con métricas, grilla responsive de
+// widgets y configuración en modal. Persistencia de preferencias sin cambios
+// en el backend.
+
+import { showToast } from "./app.js";
 
 export async function renderHomeView(container, apiBase) {
   container.innerHTML = `
-    <h1>Home</h1>
-    <p class="subtitle">Resumen de tu día y accesos rápidos</p>
+    <div class="section-header">
+      <div>
+        <h1>Home</h1>
+        <p class="subtitle">Resumen de tu día y accesos r&aacute;pidos</p>
+      </div>
+      <button class="btn btn--secondary" id="widgets-edit-btn">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
+          <circle cx="8" cy="8" r="2"/>
+          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.3 3.3l1.4 1.4M11.3 11.3l1.4 1.4M12.7 3.3l-1.4 1.4M4.7 11.3l-1.4 1.4"/>
+        </svg>
+        Configurar widgets
+      </button>
+    </div>
 
     <div id="dashboard-summary" class="summary-cards" style="margin-bottom: 24px;"></div>
 
-    <div id="dashboard-controls" class="card" style="margin-bottom: 24px; display:none;">
-      <h3>Configurar widgets</h3>
-      <p class="subtitle">Selecciona qué widgets mostrar y su orden.</p>
-      <div id="widgets-config" style="margin-top: 12px;"></div>
-      <button class="btn btn--primary" id="widgets-save-btn" style="margin-top: 12px;">Guardar preferencias</button>
-      <button class="btn btn--secondary" id="widgets-cancel-btn" style="margin-top: 12px; margin-left: 8px;">Cancelar</button>
-    </div>
-
     <div id="dashboard-grid" class="dashboard-grid"></div>
-
-    <button class="btn btn--secondary" id="widgets-edit-btn" style="margin-top: 16px;">Editar widgets</button>
   `;
 
   const summaryEl = container.querySelector("#dashboard-summary");
   const gridEl = container.querySelector("#dashboard-grid");
-  const controlsEl = container.querySelector("#dashboard-controls");
-  const configEl = container.querySelector("#widgets-config");
-  const saveBtn = container.querySelector("#widgets-save-btn");
-  const cancelBtn = container.querySelector("#widgets-cancel-btn");
   const editBtn = container.querySelector("#widgets-edit-btn");
 
   let widgets = [];
-  let editing = false;
 
+  // --- Carga de datos -------------------------------------------------------
   async function load() {
     try {
-      // Cargar resumen
-      const sumRes = await fetch(`${apiBase}/dashboard/summary`);
+      // Cargar resumen y widgets en paralelo
+      const [sumRes, wRes] = await Promise.all([
+        fetch(`${apiBase}/dashboard/summary`),
+        fetch(`${apiBase}/dashboard/widgets`),
+      ]);
+
       if (!sumRes.ok) throw new Error(`HTTP ${sumRes.status}`);
       const summary = await sumRes.json();
 
-      summaryEl.innerHTML = `
-        <div class="summary-card">
-          <div class="summary-value">${summary.tasks.pending}</div>
-          <div class="summary-label">Tareas pendientes</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-value">${summary.tasks.completed}</div>
-          <div class="summary-label">Tareas completadas</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-value">${summary.tasks.overdue}</div>
-          <div class="summary-label">Tareas vencidas</div>
-        </div>
-        <div class="summary-card">
-          <div class="summary-value">${summary.projects.active}</div>
-          <div class="summary-label">Proyectos activos</div>
-        </div>
-      `;
+      // Métricas adicionales desde endpoints existentes (sin duplicar módulos)
+      let notesCount = 0;
+      let habitsToday = { total: 0, completed: 0 };
+      try {
+        const [notesRes, habitsRes] = await Promise.all([
+          fetch(`${apiBase}/notes`),
+          fetch(`${apiBase}/habits/today`),
+        ]);
+        if (notesRes.ok) {
+          const notes = await notesRes.json();
+          notesCount = Array.isArray(notes) ? notes.length : 0;
+        }
+        if (habitsRes.ok) {
+          const items = await habitsRes.json();
+          habitsToday.total = items.length;
+          habitsToday.completed = items.filter(
+            (i) => i.entry && i.entry.status === "completed"
+          ).length;
+        }
+      } catch (_) {
+        // Métricas adicionales son best-effort
+      }
 
-      // Cargar widgets
-      const wRes = await fetch(`${apiBase}/dashboard/widgets`);
+      renderSummary(summary, notesCount, habitsToday);
+
       if (!wRes.ok) throw new Error(`HTTP ${wRes.status}`);
       widgets = await wRes.json();
       renderWidgets();
-      renderConfig();
     } catch (error) {
       summaryEl.innerHTML = "";
       gridEl.innerHTML = `
@@ -73,22 +83,62 @@ export async function renderHomeView(container, apiBase) {
     }
   }
 
+  // --- Resumen --------------------------------------------------------------
+  function renderSummary(summary, notesCount, habitsToday) {
+    const overdueClass = summary.tasks.overdue > 0 ? "text-danger" : "";
+    summaryEl.innerHTML = `
+      <div class="summary-card">
+        <div class="summary-value">${summary.tasks.pending}</div>
+        <div class="summary-label">Tareas pendientes</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value text-success">${summary.tasks.completed}</div>
+        <div class="summary-label">Tareas completadas</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value ${overdueClass}">${summary.tasks.overdue}</div>
+        <div class="summary-label">Tareas vencidas</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value">${summary.projects.active}</div>
+        <div class="summary-label">Proyectos activos</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value">${notesCount}</div>
+        <div class="summary-label">Notas</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-value">${habitsToday.completed}/${habitsToday.total}</div>
+        <div class="summary-label">H&aacute;bitos hoy</div>
+      </div>
+    `;
+  }
+
+  // --- Widgets --------------------------------------------------------------
   function renderWidgets() {
-    const visible = widgets.filter(w => w.is_visible).sort((a, b) => a.position - b.position);
+    const visible = widgets.filter((w) => w.is_visible).sort((a, b) => a.position - b.position);
 
     if (visible.length === 0) {
-      gridEl.innerHTML = `<p class="empty-state">No hay widgets visibles. Activa algunos en la configuraci&oacute;n.</p>`;
+      gridEl.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state__icon" aria-hidden="true">&#9881;</div>
+          <p class="empty-state__title">No hay widgets visibles</p>
+          <p class="empty-state__text">Activa algunos en la configuraci&oacute;n.</p>
+          <button class="btn btn--primary" id="widgets-empty-config">Configurar widgets</button>
+        </div>
+      `;
+      const emptyBtn = gridEl.querySelector("#widgets-empty-config");
+      if (emptyBtn) emptyBtn.addEventListener("click", openConfig);
       return;
     }
 
     gridEl.innerHTML = `
       <div class="widgets-grid">
-        ${visible.map(w => renderWidget(w)).join("")}
+        ${visible.map((w) => renderWidget(w)).join("")}
       </div>
     `;
 
-    // Cargar contenido de cada widget dinámicamente
-    visible.forEach(w => loadWidgetContent(w));
+    visible.forEach((w) => loadWidgetContent(w));
   }
 
   function renderWidget(w) {
@@ -136,34 +186,45 @@ export async function renderHomeView(container, apiBase) {
     }
   }
 
+  // --- Renderers de widgets -------------------------------------------------
   function renderUpcomingTasks(tasks) {
     if (tasks.length === 0) return `<p class="empty-state">No hay tareas pendientes.</p>`;
-    const items = tasks.slice(0, 5).map(t => `
+    const items = tasks
+      .slice(0, 5)
+      .map(
+        (t) => `
       <div class="task-item">
         <strong>${escapeHtml(t.title)}</strong>
         ${t.due_date ? `<span class="badge badge--status">Vence: ${t.due_date}</span>` : ""}
         ${t.priority ? `<span class="badge badge--priority-${t.priority}">${t.priority}</span>` : ""}
       </div>
-    `).join("");
-    return `<div class="widget-list">${items}${tasks.length > 5 ? `<p style="font-size:0.875rem;color:var(--text-secondary);">+ ${tasks.length - 5} m&aacute;s</p>` : ""}</div>`;
+    `
+      )
+      .join("");
+    return `<div class="widget-list">${items}${tasks.length > 5 ? `<p class="text-secondary" style="font-size:0.875rem;">+ ${tasks.length - 5} m&aacute;s</p>` : ""}</div>`;
   }
 
   function renderActiveProjects(projects) {
     if (projects.length === 0) return `<p class="empty-state">No hay proyectos activos.</p>`;
-    const items = projects.slice(0, 5).map(p => `
+    const items = projects
+      .slice(0, 5)
+      .map(
+        (p) => `
       <div class="task-item">
         <strong>${escapeHtml(p.name)}</strong>
         <span class="badge badge--status">${p.status}</span>
       </div>
-    `).join("");
-    return `<div class="widget-list">${items}${projects.length > 5 ? `<p style="font-size:0.875rem;color:var(--text-secondary);">+ ${projects.length - 5} m&aacute;s</p>` : ""}</div>`;
+    `
+      )
+      .join("");
+    return `<div class="widget-list">${items}${projects.length > 5 ? `<p class="text-secondary" style="font-size:0.875rem;">+ ${projects.length - 5} m&aacute;s</p>` : ""}</div>`;
   }
 
   function renderQuickAddTask() {
     return `
       <div class="quick-add">
         <input type="text" id="quick-task-title" aria-label="T&iacute;tulo de la nueva tarea" placeholder="T&iacute;tulo de la nueva tarea">
-        <button class="btn btn--primary btn--sm" id="quick-task-create">Crear tarea</button>
+        <button class="btn btn--primary btn--sm" id="quick-task-create">Crear</button>
       </div>
     `;
   }
@@ -172,7 +233,7 @@ export async function renderHomeView(container, apiBase) {
     return `
       <div class="quick-add">
         <input type="text" id="quick-note-title" aria-label="T&iacute;tulo de la nueva nota" placeholder="T&iacute;tulo de la nueva nota">
-        <button class="btn btn--primary btn--sm" id="quick-note-create">Crear nota</button>
+        <button class="btn btn--primary btn--sm" id="quick-note-create">Crear</button>
       </div>
     `;
   }
@@ -188,14 +249,19 @@ export async function renderHomeView(container, apiBase) {
       if (entry.status === "skipped") return `<span class="badge habit-badge--skipped">Omitido</span>`;
       return `<span class="badge habit-badge--partial">Registrado</span>`;
     };
-    const rows = items.slice(0, 6).map((item) => `
+    const rows = items
+      .slice(0, 6)
+      .map(
+        (item) => `
       <div class="task-item">
         <strong>${escapeHtml(item.habit.name)}</strong>
         ${badge(item.entry)}
       </div>
-    `).join("");
+    `
+      )
+      .join("");
     const more = items.length > 6
-      ? `<p style="font-size:0.875rem;color:var(--text-secondary);">+ ${items.length - 6} m&aacute;s</p>`
+      ? `<p class="text-secondary" style="font-size:0.875rem;">+ ${items.length - 6} m&aacute;s</p>`
       : "";
     return `<div class="widget-list">${rows}${more}</div>${link}`;
   }
@@ -224,18 +290,24 @@ export async function renderHomeView(container, apiBase) {
     if (!week.items.length) {
       return `<p class="empty-state">No hay h&aacute;bitos activos.</p>${link}`;
     }
-    const head = week.items[0].days.map((d) => {
-      const n = d.date.slice(8, 10);
-      const names = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
-      const weekday = new Date(`${d.date}T00:00:00`).getDay();
-      return `<th class="wk-th" scope="col" title="${d.date}">${names[weekday]} ${n}</th>`;
-    }).join("");
-    const rows = week.items.map((item) => `
+    const head = week.items[0].days
+      .map((d) => {
+        const n = d.date.slice(8, 10);
+        const names = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
+        const weekday = new Date(`${d.date}T00:00:00`).getDay();
+        return `<th class="wk-th" scope="col" title="${d.date}">${names[weekday]} ${n}</th>`;
+      })
+      .join("");
+    const rows = week.items
+      .map(
+        (item) => `
       <tr>
         <th class="wk-name" scope="row">${escapeHtml(item.habit.name)}</th>
         ${item.days.map((d) => `<td class="wk-td">${weekCell(d, week.today)}</td>`).join("")}
       </tr>
-    `).join("");
+    `
+      )
+      .join("");
     return `
       <div class="table-wrap">
         <table class="wk-table">
@@ -249,9 +321,7 @@ export async function renderHomeView(container, apiBase) {
       ${link}`;
   }
 
-  // Los botones quick-add se vinculan a sus elementos recién creados. Antes
-  // se adjuntaba un listener al contenedor persistente #app-view, que se
-  // acumulaba con cada navegación a Home y creaba registros duplicados.
+  // --- Quick add handlers ---------------------------------------------------
   function bindQuickAddTask() {
     const btn = container.querySelector("#quick-task-create");
     if (!btn) return;
@@ -266,10 +336,11 @@ export async function renderHomeView(container, apiBase) {
       });
       if (res.ok) {
         input.value = "";
+        showToast("Tarea creada", "success");
         await load();
       } else {
         const err = await res.json();
-        alert(err.detail || "Error creando tarea");
+        showToast(err.detail || "Error creando tarea", "error");
       }
     });
   }
@@ -288,86 +359,134 @@ export async function renderHomeView(container, apiBase) {
       });
       if (res.ok) {
         input.value = "";
+        showToast("Nota creada", "success");
         await load();
       } else {
         const err = await res.json();
-        alert(err.detail || "Error creando nota");
+        showToast(err.detail || "Error creando nota", "error");
       }
     });
   }
 
-  function renderConfig() {
+  // --- Configuración de widgets (modal) -------------------------------------
+  function openConfig() {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="config-title">
+        <h2 class="modal__title" id="config-title">Configurar widgets</h2>
+        <p class="modal__text">Selecciona qu&eacute; widgets mostrar y su orden.</p>
+        <div id="widgets-config" style="margin-bottom: 16px;"></div>
+        <div class="modal__actions">
+          <button class="btn btn--secondary" id="widgets-cancel-btn">Cancelar</button>
+          <button class="btn btn--primary" id="widgets-save-btn">Guardar preferencias</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const configEl = overlay.querySelector("#widgets-config");
+    const saveBtn = overlay.querySelector("#widgets-save-btn");
+    const cancelBtn = overlay.querySelector("#widgets-cancel-btn");
+
+    // Renderizar filas de configuración
     const sorted = [...widgets].sort((a, b) => a.position - b.position);
-    configEl.innerHTML = sorted.map((w, idx) => `
+    configEl.innerHTML = sorted
+      .map(
+        (w, idx) => `
       <div class="widget-config-row" data-widget="${w.widget_id}">
         <label>
           <input type="checkbox" ${w.is_visible ? "checked" : ""}>
           ${w.label}
         </label>
         <div class="widget-config-controls">
-          <button class="btn btn--secondary btn--sm" onclick="appHome.moveWidget('${w.widget_id}', -1)" ${idx === 0 ? "disabled" : ""}>&uarr;</button>
-          <button class="btn btn--secondary btn--sm" onclick="appHome.moveWidget('${w.widget_id}', 1)" ${idx === sorted.length - 1 ? "disabled" : ""}>&darr;</button>
+          <button class="btn btn--secondary btn--sm" data-move="up" data-idx="${idx}" ${idx === 0 ? "disabled" : ""}>&uarr;</button>
+          <button class="btn btn--secondary btn--sm" data-move="down" data-idx="${idx}" ${idx === sorted.length - 1 ? "disabled" : ""}>&darr;</button>
         </div>
       </div>
-    `).join("");
+    `
+      )
+      .join("");
+
+    // Mover widgets arriba/abajo
+    configEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-move]");
+      if (!btn) return;
+      const idx = parseInt(btn.dataset.idx, 10);
+      const dir = btn.dataset.move === "up" ? -1 : 1;
+      const targetIdx = idx + dir;
+      if (targetIdx < 0 || targetIdx >= sorted.length) return;
+      [sorted[idx], sorted[targetIdx]] = [sorted[targetIdx], sorted[idx]];
+      // Re-render
+      configEl.innerHTML = sorted
+        .map(
+          (w, i) => `
+        <div class="widget-config-row" data-widget="${w.widget_id}">
+          <label>
+            <input type="checkbox" ${w.is_visible ? "checked" : ""}>
+            ${w.label}
+          </label>
+          <div class="widget-config-controls">
+            <button class="btn btn--secondary btn--sm" data-move="up" data-idx="${i}" ${i === 0 ? "disabled" : ""}>&uarr;</button>
+            <button class="btn btn--secondary btn--sm" data-move="down" data-idx="${i}" ${i === sorted.length - 1 ? "disabled" : ""}>&darr;</button>
+          </div>
+        </div>
+      `
+        )
+        .join("");
+    });
+
+    // Guardar
+    saveBtn.addEventListener("click", async () => {
+      const prefs = [];
+      const rows = configEl.querySelectorAll(".widget-config-row");
+      rows.forEach((row, idx) => {
+        const widgetId = row.getAttribute("data-widget");
+        const checkbox = row.querySelector("input[type=checkbox]");
+        prefs.push({
+          widget_id: widgetId,
+          is_visible: checkbox.checked,
+          position: idx,
+        });
+      });
+
+      const res = await fetch(`${apiBase}/dashboard/widgets`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prefs),
+      });
+
+      if (res.ok) {
+        overlay.remove();
+        showToast("Preferencias guardadas", "success");
+        await load();
+      } else {
+        const err = await res.json();
+        showToast(err.detail || "Error guardando preferencias", "error");
+      }
+    });
+
+    // Cancelar
+    cancelBtn.addEventListener("click", () => overlay.remove());
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+
+    // Escape para cerrar
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        overlay.remove();
+        document.removeEventListener("keydown", onKey);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+
+    // Focus en el primer checkbox
+    const firstCheckbox = configEl.querySelector("input[type=checkbox]");
+    if (firstCheckbox) firstCheckbox.focus();
   }
 
-  // Event listeners
-  saveBtn.addEventListener("click", async () => {
-    const prefs = [];
-    const rows = configEl.querySelectorAll(".widget-config-row");
-    rows.forEach((row, idx) => {
-      const widgetId = row.getAttribute("data-widget");
-      const checkbox = row.querySelector("input[type=checkbox]");
-      prefs.push({
-        widget_id: widgetId,
-        is_visible: checkbox.checked,
-        position: idx,
-      });
-    });
-
-    const res = await fetch(`${apiBase}/dashboard/widgets`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(prefs),
-    });
-
-    if (res.ok) {
-      editing = false;
-      controlsEl.style.display = "none";
-      await load();
-    } else {
-      const err = await res.json();
-      alert(err.detail || "Error guardando preferencias");
-    }
-  });
-
-  cancelBtn.addEventListener("click", () => {
-    editing = false;
-    controlsEl.style.display = "none";
-  });
-
-  editBtn.addEventListener("click", () => {
-    editing = true;
-    controlsEl.style.display = "block";
-    renderConfig();
-  });
-
-  // Quick add: los handlers se vinculan en bindQuickAddTask/bindQuickAddNote
-  // (uno por elemento creado); no agregar listeners al contenedor persistente.
-
-  window.appHome = {
-    moveWidget(widgetId, direction) {
-      const idx = widgets.findIndex(w => w.widget_id === widgetId);
-      if (idx === -1) return;
-      const targetIdx = idx + direction;
-      if (targetIdx < 0 || targetIdx >= widgets.length) return;
-      [widgets[idx], widgets[targetIdx]] = [widgets[targetIdx], widgets[idx]];
-      widgets[idx].position = idx;
-      widgets[targetIdx].position = targetIdx;
-      renderConfig();
-    },
-  };
+  editBtn.addEventListener("click", openConfig);
 
   await load();
 }

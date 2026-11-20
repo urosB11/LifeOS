@@ -1,8 +1,10 @@
-// Life OS — vista Hábitos (Fase 7: Habit Tracker)
+// Life OS — vista Hábitos (Fase 8C)
 //
 // Registro rápido del día, calendario de consistencia y gestión de hábitos.
 // Las reglas de días programados viven en el backend (/habits/{id}/calendar);
-// esta vista solo pinta y envía acciones.
+// esta vista solo pinta y envía acciones. Usa componentes de 8A.
+
+import { showToast, showConfirm } from "./app.js";
 
 const MONTHS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -49,7 +51,7 @@ function targetLabel(habit) {
 export async function renderHabitsView(container, apiBase) {
   container.innerHTML = `
     <div id="habits-view">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div class="section-header">
         <div>
           <h1>Hábitos</h1>
           <p class="subtitle">Tu seguimiento diario</p>
@@ -62,7 +64,7 @@ export async function renderHabitsView(container, apiBase) {
                   border-radius:var(--radius); color:var(--danger);"></div>
 
       <form id="habit-form" class="card" hidden style="margin-top:16px;" novalidate>
-        <h3 id="habit-form-title">Nuevo hábito</h3>
+        <h3 id="habit-form-title" style="margin-top:0;">Nuevo hábito</h3>
         <div class="form-row" style="margin-top:12px;">
           <div class="form-group" style="flex:2; min-width:240px;">
             <label for="hf-name">Nombre</label>
@@ -127,14 +129,22 @@ export async function renderHabitsView(container, apiBase) {
       <div id="habits-summary" class="summary-cards" style="margin-top:20px;"></div>
 
       <h2 style="margin-top:24px;">Hoy</h2>
-      <div id="habits-today" class="empty-state">Cargando…</div>
+      <div id="habits-today" class="empty-state">
+        <div class="empty-state__icon" aria-hidden="true">&#8987;</div>
+        <p class="empty-state__title">Cargando&hellip;</p>
+      </div>
 
       <section class="card" style="margin-top:24px;">
         <h3 style="margin-top:0;">Métricas</h3>
         <p class="subtitle" style="margin-bottom:12px;">
           Rachas y cumplimiento sobre días programados (fórmulas en la documentación).
         </p>
-        <div id="habits-stats">Cargando…</div>
+        <div id="habits-stats">
+          <div class="empty-state">
+            <div class="empty-state__icon" aria-hidden="true">&#8987;</div>
+            <p class="empty-state__title">Cargando&hellip;</p>
+          </div>
+        </div>
       </section>
 
       <section class="card habits-calendar" style="margin-top:24px;">
@@ -152,7 +162,12 @@ export async function renderHabitsView(container, apiBase) {
                     data-action="cal-next" aria-label="Mes siguiente">&#8250;</button>
           </div>
         </div>
-        <div id="calendar-grid">Cargando…</div>
+        <div id="calendar-grid">
+          <div class="empty-state">
+            <div class="empty-state__icon" aria-hidden="true">&#8987;</div>
+            <p class="empty-state__title">Cargando&hellip;</p>
+          </div>
+        </div>
         <ul class="cal-legend">
           <li><span class="cal-swatch cal-day--done"></span>Cumplido</li>
           <li><span class="cal-swatch cal-day--partial"></span>Registrado sin completar</li>
@@ -163,7 +178,7 @@ export async function renderHabitsView(container, apiBase) {
       </section>
 
       <h2 style="margin-top:28px;">Todos los hábitos</h2>
-      <div class="filters-bar" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+      <div class="filters-bar" style="margin-bottom:12px;">
         <label class="sr-only" for="filter-category">Filtrar por categoría</label>
         <select id="filter-category">
           <option value="">Todas las categorías</option>
@@ -176,7 +191,10 @@ export async function renderHabitsView(container, apiBase) {
           <option value="archived">Archivados</option>
         </select>
       </div>
-      <div id="habits-manage" class="empty-state">Cargando…</div>
+      <div id="habits-manage" class="empty-state">
+        <div class="empty-state__icon" aria-hidden="true">&#8987;</div>
+        <p class="empty-state__title">Cargando&hellip;</p>
+      </div>
     </div>
   `;
 
@@ -239,7 +257,7 @@ export async function renderHabitsView(container, apiBase) {
     const pending = todayItems.length - done - skipped;
     summaryEl.innerHTML = `
       <div class="summary-card">
-        <div class="summary-value">${done}</div>
+        <div class="summary-value text-success">${done}</div>
         <div class="summary-label">Cumplidos hoy</div>
       </div>
       <div class="summary-card">
@@ -247,7 +265,7 @@ export async function renderHabitsView(container, apiBase) {
         <div class="summary-label">Pendientes</div>
       </div>
       <div class="summary-card">
-        <div class="summary-value">${skipped}</div>
+        <div class="summary-value text-secondary">${skipped}</div>
         <div class="summary-label">Omitidos</div>
       </div>
     `;
@@ -278,8 +296,12 @@ export async function renderHabitsView(container, apiBase) {
     if (!todayItems.length) {
       todayEl.className = "empty-state";
       todayEl.innerHTML = habits.length
-        ? "<p>No hay hábitos programados para hoy.</p>"
-        : `<p>Aún no hay hábitos. Crea el primero con el botón “Nuevo hábito”.</p>`;
+        ? `<div class="empty-state__icon" aria-hidden="true">&#10003;</div>
+           <p class="empty-state__title">Sin hábitos hoy</p>
+           <p class="empty-state__text">No hay hábitos programados para hoy.</p>`
+        : `<div class="empty-state__icon" aria-hidden="true">&#127991;</div>
+           <p class="empty-state__title">Aún no hay hábitos</p>
+           <p class="empty-state__text">Crea el primero con el botón "Nuevo hábito".</p>`;
       return;
     }
     todayEl.className = "habits-today";
@@ -351,7 +373,7 @@ export async function renderHabitsView(container, apiBase) {
 
   function pctText(value) {
     if (value === null || value === undefined) {
-      return `<span style="color:var(--text-secondary)">Sin datos</span>`;
+      return `<span class="text-secondary">Sin datos</span>`;
     }
     return `${value}%`;
   }
@@ -362,8 +384,11 @@ export async function renderHabitsView(container, apiBase) {
 
   function renderStats(list) {
     if (!list || !list.length) {
-      statsEl.innerHTML = `<p style="color:var(--text-secondary)">
-        Aún no hay métricas que mostrar.</p>`;
+      statsEl.innerHTML = `<div class="empty-state">
+        <div class="empty-state__icon" aria-hidden="true">&#128202;</div>
+        <p class="empty-state__title">Sin métricas</p>
+        <p class="empty-state__text">Aún no hay métricas que mostrar.</p>
+      </div>`;
       return;
     }
     statsEl.innerHTML = `
@@ -420,18 +445,29 @@ export async function renderHabitsView(container, apiBase) {
 
   async function renderCalendar() {
     if (!calendar.habitId) {
-      calendarGridEl.innerHTML = `<p class="empty-state">Crea un hábito para ver su calendario.</p>`;
+      calendarGridEl.innerHTML = `<div class="empty-state">
+        <div class="empty-state__icon" aria-hidden="true">&#128197;</div>
+        <p class="empty-state__title">Sin hábitos</p>
+        <p class="empty-state__text">Crea un hábito para ver su calendario.</p>
+      </div>`;
       calMonthEl.textContent = "";
       return;
     }
     const monthStr = `${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}`;
     calMonthEl.textContent = `${MONTHS[calendar.month]} ${calendar.year}`;
-    calendarGridEl.innerHTML = `<p class="empty-state">Cargando…</p>`;
+    calendarGridEl.innerHTML = `<div class="empty-state">
+      <div class="empty-state__icon" aria-hidden="true">&#8987;</div>
+      <p class="empty-state__title">Cargando&hellip;</p>
+    </div>`;
     try {
       const data = await api(`/habits/${calendar.habitId}/calendar?month=${monthStr}`);
       drawCalendar(data);
     } catch (error) {
-      calendarGridEl.innerHTML = `<p class="empty-state">No se pudo cargar el calendario. ${esc(error.message)}</p>`;
+      calendarGridEl.innerHTML = `<div class="empty-state">
+        <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
+        <p class="empty-state__title">Error</p>
+        <p class="empty-state__text">No se pudo cargar el calendario. ${esc(error.message)}</p>
+      </div>`;
     }
   }
 
@@ -495,12 +531,16 @@ export async function renderHabitsView(container, apiBase) {
 
     if (!habits.length) {
       manageEl.className = "empty-state";
-      manageEl.innerHTML = `<p>Crea tu primer hábito para empezar a seguirlo.</p>`;
+      manageEl.innerHTML = `<div class="empty-state__icon" aria-hidden="true">&#127991;</div>
+        <p class="empty-state__title">Sin hábitos</p>
+        <p class="empty-state__text">Crea tu primer hábito para empezar a seguirlo.</p>`;
       return;
     }
     if (!rows.length) {
       manageEl.className = "empty-state";
-      manageEl.innerHTML = `<p>Ningún hábito coincide con el filtro.</p>`;
+      manageEl.innerHTML = `<div class="empty-state__icon" aria-hidden="true">&#128269;</div>
+        <p class="empty-state__title">Sin resultados</p>
+        <p class="empty-state__text">Ningún hábito coincide con el filtro.</p>`;
       return;
     }
     manageEl.className = "habits-manage";
@@ -522,6 +562,9 @@ export async function renderHabitsView(container, apiBase) {
             const statusBadge =
               h.status === "active" ? "Activo" :
               h.status === "paused" ? "Pausado" : "Archivado";
+            const statusBadgeClass =
+              h.status === "active" ? "status" :
+              h.status === "paused" ? "warning" : "neutral";
             const statusAction =
               h.status === "active"
                 ? `<button type="button" class="btn btn--secondary btn--sm" data-action="pause" data-id="${h.id}">Pausar</button>
@@ -537,9 +580,9 @@ export async function renderHabitsView(container, apiBase) {
                   <strong>${esc(h.name)}</strong>
                 </td>
                 <td>${esc(frequencyLabel(h))}</td>
-                <td>${h.category ? esc(h.category) : "—"}</td>
-                <td>${h.target_value !== null && h.target_value !== undefined ? esc(targetLabel(h)) : "—"}</td>
-                <td><span class="badge badge--status">${statusBadge}</span></td>
+                <td>${h.category ? esc(h.category) : "&mdash;"}</td>
+                <td>${h.target_value !== null && h.target_value !== undefined ? esc(targetLabel(h)) : "&mdash;"}</td>
+                <td><span class="badge badge--${statusBadgeClass}">${statusBadge}</span></td>
                 <td>
                   <div class="btn-group">
                     <button type="button" class="btn btn--secondary btn--sm" data-action="move-up"
@@ -640,8 +683,10 @@ export async function renderHabitsView(container, apiBase) {
     try {
       if (editingId) {
         await api(`/habits/${editingId}`, { method: "PATCH", body: JSON.stringify(payload) });
+        showToast("Hábito actualizado", "success");
       } else {
         await api("/habits", { method: "POST", body: JSON.stringify(payload) });
+        showToast("Hábito creado", "success");
       }
       closeForm();
       await refresh();
@@ -700,12 +745,14 @@ export async function renderHabitsView(container, apiBase) {
         return;
       }
       case "mark":
-        await withError(() => api(`/habits/${id}/entries`, { method: "POST", body: "{}" }));
+        await withError(async () => {
+          await api(`/habits/${id}/entries`, { method: "POST", body: "{}" });
+          showToast("Hábito marcado como cumplido", "success");
+        });
         return;
       case "skip": {
         const item = todayItems.find((i) => i.habit.id === id);
         const body = JSON.stringify({ status: "skipped" });
-        // Si ya hay registro del día se corrige (PATCH); si no, se crea (POST)
         await withError(async () => {
           if (item && item.entry) {
             await api(`/habits/${id}/entries/${item.entry.entry_date}`, {
@@ -714,15 +761,17 @@ export async function renderHabitsView(container, apiBase) {
           } else {
             await api(`/habits/${id}/entries`, { method: "POST", body });
           }
+          showToast("Hábito omitido", "success");
         });
         return;
       }
       case "undo": {
         const item = todayItems.find((i) => i.habit.id === id);
         if (!item || !item.entry) return;
-        await withError(() =>
-          api(`/habits/${id}/entries/${item.entry.entry_date}`, { method: "DELETE" })
-        );
+        await withError(async () => {
+          await api(`/habits/${id}/entries/${item.entry.entry_date}`, { method: "DELETE" });
+          showToast("Registro deshecho", "success");
+        });
         return;
       }
       case "save-value": {
@@ -739,6 +788,7 @@ export async function renderHabitsView(container, apiBase) {
           } else {
             await api(`/habits/${id}/entries`, { method: "POST", body });
           }
+          showToast("Cantidad guardada", "success");
         });
         return;
       }
@@ -746,25 +796,43 @@ export async function renderHabitsView(container, apiBase) {
         openForm(habitById(id));
         return;
       case "pause":
-        await withError(() => api(`/habits/${id}/pause`, { method: "POST" }));
+        await withError(async () => {
+          await api(`/habits/${id}/pause`, { method: "POST" });
+          showToast("Hábito pausado", "success");
+        });
         return;
       case "resume":
-        await withError(() => api(`/habits/${id}/resume`, { method: "POST" }));
+        await withError(async () => {
+          await api(`/habits/${id}/resume`, { method: "POST" });
+          showToast("Hábito reactivado", "success");
+        });
         return;
       case "archive":
-        await withError(() => api(`/habits/${id}/archive`, { method: "POST" }));
+        await withError(async () => {
+          await api(`/habits/${id}/archive`, { method: "POST" });
+          showToast("Hábito archivado", "success");
+        });
         return;
       case "restore":
-        await withError(() => api(`/habits/${id}/restore`, { method: "POST" }));
+        await withError(async () => {
+          await api(`/habits/${id}/restore`, { method: "POST" });
+          showToast("Hábito restaurado", "success");
+        });
         return;
       case "delete": {
         const habit = habitById(id);
         if (!habit) return;
-        const ok = confirm(
-          `¿Eliminar el hábito "${habit.name}"? Si tiene registros no se podrá eliminar; deberás archivarlo.`
-        );
-        if (!ok) return;
-        await withError(() => api(`/habits/${id}`, { method: "DELETE" }));
+        const confirmed = await showConfirm({
+          title: "Eliminar hábito",
+          text: `¿Eliminar el hábito "${habit.name}"? Si tiene registros no se podrá eliminar; deberás archivarlo.`,
+          confirmLabel: "Eliminar",
+          danger: true,
+        });
+        if (!confirmed) return;
+        await withError(async () => {
+          await api(`/habits/${id}`, { method: "DELETE" });
+          showToast("Hábito eliminado", "success");
+        });
         return;
       }
       case "move-up":
@@ -819,8 +887,18 @@ export async function renderHabitsView(container, apiBase) {
     await refresh();
   } catch (error) {
     showError(`No se pudieron cargar los hábitos: ${error.message}`);
-    todayEl.innerHTML = `<p>No se pudo cargar la información. Verifica que el servicio esté activo.</p>`;
-    statsEl.innerHTML = `<p>No se pudo cargar la información.</p>`;
-    manageEl.innerHTML = `<p>No se pudo cargar la información.</p>`;
+    todayEl.innerHTML = `<div class="empty-state">
+      <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
+      <p class="empty-state__title">Error al cargar</p>
+      <p class="empty-state__text">No se pudo cargar la información. Verifica que el servicio esté activo.</p>
+    </div>`;
+    statsEl.innerHTML = `<div class="empty-state">
+      <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
+      <p class="empty-state__title">Error al cargar</p>
+    </div>`;
+    manageEl.innerHTML = `<div class="empty-state">
+      <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
+      <p class="empty-state__title">Error al cargar</p>
+    </div>`;
   }
 }
