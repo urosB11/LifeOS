@@ -14,7 +14,13 @@ READY = especificada y autorizada; PLANNING = solo diseño; IN_PROGRESS = ejecuc
 
 ## Fase 9 — READY
 ### STAB-001 — QA manual Fase 8
-Prioridad P0 · Reviewer Mimo · Spec STAB-001/SPEC.md · Solo revisión, no código.
+- **Estado:** REVIEW
+- **Prioridad:** P0
+- **Rol responsable:** Reviewer — Mimo
+- **Asignado a:** Developer (ejecución de QA propia)
+- **Dependencias:** ninguna
+- **Fecha creada:** 2026-11-20
+- **Notas:** Spec STAB-001/SPEC.md · Solo revisión, no código. QA ejecutada contra main (commit 27791fc) con base temporal en LIFEOS_DATA_DIR. Verificado: health, proyectos, métricas, creación de tarea desde proyecto (PRJ-002), transiciones de estado, manejo de errores (422/404), calendario de hábitos (HAB-001), frontend servido. Pruebas: 139/139 pytest, ruff OK, node --check OK. Pendiente: revisión visual en navegador (1440×900, 768×1024, 390×844) y revisión independiente por Mimo.
 
 ### BUG-001 — Conservar formulario ante error
 Prioridad P0 · Developer Nemo · Spec BUG-001/SPEC.md · Reproducir antes de corregir.
