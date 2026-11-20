@@ -58,6 +58,10 @@ class ProjectOut(ProjectBase):
     updated_at: str
     completed_at: str | None = None
     archived_at: str | None = None
+    task_count: int = 0
+    completed_count: int = 0
+    overdue_count: int = 0
+    next_due_date: str | None = None
 
     model_config = {"from_attributes": True}
 

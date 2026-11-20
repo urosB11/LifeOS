@@ -641,15 +641,21 @@ body.theme-dark .habit-row--done {
   gap: 8px;
 }
 
+.cal {
+  max-width: 340px;
+  margin: 0 auto;
+}
+
 .cal__weekdays,
 .cal__days {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(7, 36px);
+  gap: 4px;
+  justify-content: center;
 }
 
 .cal__weekdays {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .cal__weekdays span {
@@ -660,12 +666,13 @@ body.theme-dark .habit-row--done {
 }
 
 .cal-day {
-  aspect-ratio: 1;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius);
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   border: 1px solid transparent;
 }
 
@@ -897,9 +904,21 @@ body.theme-dark .habit-row--done {
     min-height: 36px;
   }
 
+  .cal {
+    max-width: 100%;
+  }
+
   .cal__weekdays,
   .cal__days {
-    gap: 4px;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+
+  .cal-day {
+    width: auto;
+    height: 32px;
+    aspect-ratio: 1;
+    font-size: 0.6875rem;
   }
 
   .toast-container {

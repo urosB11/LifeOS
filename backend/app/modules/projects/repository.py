@@ -1,5 +1,7 @@
 """Repositorio de Proyectos."""
 
+from __future__ import annotations
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -45,6 +47,53 @@ class ProjectRepository:
 
         stmt = select(func.count(Task.id)).where(Task.project_id == project_id)
         return self.db.execute(stmt).scalar_one()
+
+    def get_task_metrics(self, project_ids: list[str]) -> dict[str, dict]:
+        """Calcula métricas de tareas por proyecto en una sola consulta.
+
+        Métricas (DATABASE.md §8, REQUIREMENTS.md FR-AN-03/04):
+        - task_count: total de tareas del proyecto.
+        - completed_count: tareas con status='completed'.
+        - overdue_count: tareas pending con due_date anterior a hoy (local).
+        - next_due_date: menor due_date entre tareas pending con due_date >= hoy.
+        """
+        from app.core.clock import local_today
+        from app.modules.tasks.models import Task
+
+        if not project_ids:
+            return {}
+
+        today = local_today(self.db).isoformat()
+        stmt = select(Task).where(Task.project_id.in_(project_ids))
+        tasks = list(self.db.execute(stmt).scalars().all())
+
+        metrics: dict[str, dict] = {
+            pid: {
+                "task_count": 0,
+                "completed_count": 0,
+                "overdue_count": 0,
+                "next_due_date": None,
+            }
+            for pid in project_ids
+        }
+
+        for task in tasks:
+            pid = task.project_id
+            if pid not in metrics:
+                continue
+            metrics[pid]["task_count"] += 1
+            if task.status == "completed":
+                metrics[pid]["completed_count"] += 1
+            elif task.status == "pending" and task.due_date:
+                if task.due_date < today:
+                    metrics[pid]["overdue_count"] += 1
+                elif (
+                    metrics[pid]["next_due_date"] is None
+                    or task.due_date < metrics[pid]["next_due_date"]
+                ):
+                    metrics[pid]["next_due_date"] = task.due_date
+
+        return metrics
 
     def create(self, project_in: ProjectCreate) -> Project:
         db_obj = Project(

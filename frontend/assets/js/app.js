@@ -1,6 +1,6 @@
 // Life OS — aplicación principal (enrutamiento basado en hash, JavaScript nativo)
 
-import { renderProjectsView } from "./projects.js";
+import { renderProjectsView, renderProjectDetailView } from "./projects.js";
 import { renderTasksView } from "./tasks.js";
 import { renderNotesView } from "./notes.js";
 import { renderHabitsView } from "./habits.js";
@@ -185,7 +185,9 @@ function setActiveNav(path) {
 async function route() {
   const hash = location.hash || "#/";
   // "#/home" es un alias legible de "#/" (el dashboard real)
-  setActiveNav(hash === "#/home" ? "#/" : hash);
+  // "#/projects/:id" mantiene activo el enlace de Proyectos
+  const navHash = hash.startsWith("#/projects/") ? "#/projects" : hash;
+  setActiveNav(navHash === "#/home" ? "#/" : navHash);
 
   if (hash === "#/" || hash === "" || hash === "#/home") {
     // Home abre el dashboard con widgets (Fase 4); el stub anterior dejaba
@@ -193,6 +195,9 @@ async function route() {
     await renderHomeView(viewEl, API_BASE);
   } else if (hash === "#/projects") {
     await renderProjectsView(viewEl, API_BASE);
+  } else if (hash.startsWith("#/projects/")) {
+    const projectId = hash.replace("#/projects/", "");
+    await renderProjectDetailView(viewEl, API_BASE, projectId);
   } else if (hash === "#/tasks") {
     await renderTasksView(viewEl, API_BASE);
   } else if (hash === "#/notes") {

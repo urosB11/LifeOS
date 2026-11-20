@@ -18,6 +18,17 @@ class ProjectService:
         self.task_repo = task_repo
         self.db = db
 
+    def _out(self, project) -> ProjectOut:
+        """Convierte un proyecto a ProjectOut y adjunta métricas de tareas."""
+        out = ProjectOut.model_validate(project)
+        metrics = self.project_repo.get_task_metrics([project.id]).get(project.id)
+        if metrics:
+            out.task_count = metrics["task_count"]
+            out.completed_count = metrics["completed_count"]
+            out.overdue_count = metrics["overdue_count"]
+            out.next_due_date = metrics["next_due_date"]
+        return out
+
     def create(self, project_in: ProjectCreate) -> ProjectOut:
         project = self.project_repo.create(project_in)
         record_event(
@@ -27,17 +38,28 @@ class ProjectService:
             entity_id=project.id,
             metadata={"name": project.name, "status": project.status},
         )
-        return ProjectOut.model_validate(project)
+        return self._out(project)
 
     def get(self, project_id: str) -> ProjectOut | None:
         project = self.project_repo.get_with_tasks(project_id)
         if project is None:
             return None
-        return ProjectOut.model_validate(project)
+        return self._out(project)
 
     def list(self, status: str | None = None) -> list[ProjectOut]:
         projects = self.project_repo.list(status=status)
-        return [ProjectOut.model_validate(p) for p in projects]
+        metrics_map = self.project_repo.get_task_metrics([p.id for p in projects])
+        result = []
+        for p in projects:
+            out = ProjectOut.model_validate(p)
+            metrics = metrics_map.get(p.id)
+            if metrics:
+                out.task_count = metrics["task_count"]
+                out.completed_count = metrics["completed_count"]
+                out.overdue_count = metrics["overdue_count"]
+                out.next_due_date = metrics["next_due_date"]
+            result.append(out)
+        return result
 
     def update(self, project_id: str, project_in: ProjectUpdate) -> ProjectOut | None:
         project = self.project_repo.get(project_id)
@@ -51,14 +73,14 @@ class ProjectService:
             entity_id=project_id,
             metadata={"fields": list(project_in.model_dump(exclude_unset=True).keys())},
         )
-        return ProjectOut.model_validate(updated)
+        return self._out(updated)
 
     def complete(self, project_id: str) -> ProjectOut | None:
         project = self.project_repo.get(project_id)
         if project is None:
             return None
         if project.status == "completed":
-            return ProjectOut.model_validate(project)
+            return self._out(project)
         updated = self.project_repo.complete(project)
         record_event(
             self.db,
@@ -66,14 +88,14 @@ class ProjectService:
             entity_type="project",
             entity_id=project_id,
         )
-        return ProjectOut.model_validate(updated)
+        return self._out(updated)
 
     def reopen(self, project_id: str) -> ProjectOut | None:
         project = self.project_repo.get(project_id)
         if project is None:
             return None
         if project.status == "active":
-            return ProjectOut.model_validate(project)
+            return self._out(project)
         updated = self.project_repo.reopen(project)
         record_event(
             self.db,
@@ -81,14 +103,14 @@ class ProjectService:
             entity_type="project",
             entity_id=project_id,
         )
-        return ProjectOut.model_validate(updated)
+        return self._out(updated)
 
     def archive(self, project_id: str) -> ProjectOut | None:
         project = self.project_repo.get(project_id)
         if project is None:
             return None
         if project.status == "archived":
-            return ProjectOut.model_validate(project)
+            return self._out(project)
         updated = self.project_repo.archive(project)
         record_event(
             self.db,
@@ -96,14 +118,14 @@ class ProjectService:
             entity_type="project",
             entity_id=project_id,
         )
-        return ProjectOut.model_validate(updated)
+        return self._out(updated)
 
     def restore(self, project_id: str) -> ProjectOut | None:
         project = self.project_repo.get(project_id)
         if project is None:
             return None
         if project.status == "active":
-            return ProjectOut.model_validate(project)
+            return self._out(project)
         updated = self.project_repo.restore(project)
         record_event(
             self.db,
@@ -111,7 +133,7 @@ class ProjectService:
             entity_type="project",
             entity_id=project_id,
         )
-        return ProjectOut.model_validate(updated)
+        return self._out(updated)
 
     def delete(self, project_id: str) -> bool:
         """Elimina físicamente un proyecto solo si no tiene tareas asociadas.

@@ -1,9 +1,61 @@
-// Life OS — vista de Proyectos (Fase 8C)
+// Life OS — vista de Proyectos (Fase 8C + Rediseño Etapa 1)
 //
-// Listado, creación, edición inline, estados y acciones. Usa los componentes
-// compartidos de 8A (section-header, badges, empty-state, toast, confirm).
+// Listado con métricas de seguimiento, vista de detalle con tareas
+// asociadas, edición y transiciones de estado. Usa componentes de 8A.
 
 import { showToast, showConfirm } from "./app.js";
+
+// --- Utilidades compartidas -------------------------------------------------
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function statusBadgeClass(status) {
+  if (status === "active") return "status";
+  if (status === "completed") return "success";
+  return "neutral";
+}
+
+function statusLabel(status) {
+  if (status === "active") return "Activo";
+  if (status === "completed") return "Completado";
+  return "Archivado";
+}
+
+function projectActions(status) {
+  if (status === "active") {
+    return [["complete", "Completar"], ["archive", "Archivar"]];
+  }
+  if (status === "completed") {
+    return [["reopen", "Reabrir"], ["archive", "Archivar"]];
+  }
+  return [["restore", "Restaurar"]];
+}
+
+function progressPercent(completed, total) {
+  if (total === 0) return null;
+  return Math.round((completed / total) * 100);
+}
+
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isOverdue(dueDate) {
+  return dueDate < todayISO();
+}
+
+function isFutureDue(dueDate) {
+  return dueDate >= todayISO();
+}
+
+// --- Vista de listado -------------------------------------------------------
 
 export async function renderProjectsView(container, apiBase) {
   container.innerHTML = `
@@ -42,17 +94,6 @@ export async function renderProjectsView(container, apiBase) {
   const descInput = container.querySelector("#proj-desc");
   const createBtn = container.querySelector("#proj-create-btn");
 
-  // Acciones disponibles por estado (FR-PROJ-04 / FR-PROJ-06)
-  function projectActions(status) {
-    if (status === "active") {
-      return [["complete", "Completar"], ["archive", "Archivar"]];
-    }
-    if (status === "completed") {
-      return [["reopen", "Reabrir"], ["archive", "Archivar"]];
-    }
-    return [["restore", "Restaurar"]]; // archived
-  }
-
   let currentProjects = [];
 
   async function load() {
@@ -81,27 +122,60 @@ export async function renderProjectsView(container, apiBase) {
           <thead>
             <tr>
               <th>Nombre</th>
-              <th>Descripci&oacute;n</th>
               <th>Estado</th>
+              <th>Avance</th>
+              <th>Vencidas</th>
+              <th>Pr&oacute;ximo vencimiento</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            ${projects.map(p => `
+            ${projects.map(p => {
+              const pct = progressPercent(p.completed_count, p.task_count);
+              const hasTasks = p.task_count > 0;
+              return `
               <tr id="proj-row-${p.id}">
-                <td><strong>${escapeHtml(p.name)}</strong></td>
-                <td>${p.description ? escapeHtml(p.description) : "&mdash;"}</td>
+                <td>
+                  <a href="#/projects/${p.id}" style="font-weight:600; color:var(--accent); text-decoration:none;">
+                    ${escapeHtml(p.name)}
+                  </a>
+                </td>
                 <td><span class="badge badge--${statusBadgeClass(p.status)}">${statusLabel(p.status)}</span></td>
+                <td>
+                  ${hasTasks ? `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span style="font-size:0.875rem; white-space:nowrap;">${p.completed_count}/${p.task_count}</span>
+                      <div class="progress" style="min-width:60px; flex:1;" role="progressbar"
+                           aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"
+                           aria-label="Avance de ${escapeHtml(p.name)}">
+                        <div class="progress__bar" style="width:${pct}%"></div>
+                      </div>
+                      <span style="font-size:0.875rem; min-width:32px; text-align:right;">${pct}%</span>
+                    </div>
+                  ` : `<span class="text-secondary">Sin tareas</span>`}
+                </td>
+                <td>
+                  ${p.overdue_count > 0
+                    ? `<span class="text-danger" style="font-weight:600;">${p.overdue_count}</span>`
+                    : `<span class="text-secondary">0</span>`}
+                </td>
+                <td>
+                  ${p.next_due_date
+                    ? (isFutureDue(p.next_due_date)
+                      ? `<span>${p.next_due_date}</span>`
+                      : `<span class="text-danger">${p.next_due_date}</span>`)
+                    : `<span class="text-secondary">&mdash;</span>`}
+                </td>
                 <td>
                   <div class="btn-group">
                     ${projectActions(p.status).map(([action, label]) => `
                       <button class="btn btn--secondary btn--sm" onclick="appProjects.runAction('${p.id}', '${action}')">${label}</button>
                     `).join("")}
-                    <button class="btn btn--danger btn--sm" onclick="appProjects.deleteProject('${p.id}')">Eliminar</button>
                   </div>
+                  <button class="btn btn--danger btn--sm" style="margin-top:4px;" onclick="appProjects.deleteProject('${p.id}')">Eliminar</button>
                 </td>
-              </tr>
-            `).join("")}
+              </tr>`;
+            }).join("")}
           </tbody>
         </table>
         </div>
@@ -114,18 +188,6 @@ export async function renderProjectsView(container, apiBase) {
         <button class="btn btn--secondary" onclick="appProjects.reload()">Reintentar</button>
       `;
     }
-  }
-
-  function statusBadgeClass(status) {
-    if (status === "active") return "status";
-    if (status === "completed") return "success";
-    return "neutral";
-  }
-
-  function statusLabel(status) {
-    if (status === "active") return "Activo";
-    if (status === "completed") return "Completado";
-    return "Archivado";
   }
 
   createBtn.addEventListener("click", async () => {
@@ -188,7 +250,7 @@ export async function renderProjectsView(container, apiBase) {
       const name = project ? project.name : "";
       const confirmed = await showConfirm({
         title: "Eliminar proyecto",
-        text: `¿Eliminar el proyecto "${name}"? Esta acción no se puede deshacer si hay tareas vinculadas.`,
+        text: `&iquest;Eliminar el proyecto "${escapeHtml(name)}"? Esta acci&oacute;n lo elimina permanentemente (solo si no tiene tareas asociadas).`,
         confirmLabel: "Eliminar",
         danger: true,
       });
@@ -219,8 +281,417 @@ export async function renderProjectsView(container, apiBase) {
   await load();
 }
 
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
+// --- Vista de detalle -------------------------------------------------------
+
+export async function renderProjectDetailView(container, apiBase, projectId) {
+  container.innerHTML = `
+    <div class="section-header">
+      <div>
+        <a href="#/projects" class="btn btn--secondary btn--sm" style="margin-bottom:8px; display:inline-flex;">
+          &larr; Volver al listado
+        </a>
+        <h1 id="detail-title">Cargando&hellip;</h1>
+        <p class="subtitle" id="detail-subtitle"></p>
+      </div>
+      <div class="btn-group" id="detail-header-actions"></div>
+    </div>
+
+    <div id="detail-content">
+      <div class="empty-state">
+        <div class="empty-state__icon" aria-hidden="true">&#8987;</div>
+        <p class="empty-state__title">Cargando proyecto&hellip;</p>
+      </div>
+    </div>
+  `;
+
+  const titleEl = container.querySelector("#detail-title");
+  const subtitleEl = container.querySelector("#detail-subtitle");
+  const headerActionsEl = container.querySelector("#detail-header-actions");
+  const contentEl = container.querySelector("#detail-content");
+
+  let project = null;
+  let tasks = [];
+  let taskFormOpen = false;
+  let creatingTask = false;
+  let taskError = "";
+
+  async function load() {
+    try {
+      const res = await fetch(`${apiBase}/projects/${projectId}`);
+      if (!res.ok) {
+        if (res.status === 404) {
+          titleEl.textContent = "Proyecto no encontrado";
+          contentEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
+              <p class="empty-state__title">Proyecto no encontrado</p>
+              <p class="empty-state__text">El proyecto que buscas no existe o fue eliminado.</p>
+              <a href="#/projects" class="btn btn--secondary">Volver al listado</a>
+            </div>
+          `;
+          return;
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
+      project = await res.json();
+
+      titleEl.textContent = project.name;
+      subtitleEl.textContent = `Estado: ${statusLabel(project.status)}`;
+      headerActionsEl.innerHTML = `
+        <button class="btn btn--secondary btn--sm" onclick="appProjectsDetail.editProject()">Editar</button>
+      `;
+
+      // Cargar tareas del proyecto
+      try {
+        const tasksRes = await fetch(`${apiBase}/tasks?project_id=${projectId}`);
+        if (tasksRes.ok) {
+          tasks = await tasksRes.json();
+        }
+      } catch (e) {
+        tasks = [];
+      }
+
+      renderDetail();
+    } catch (error) {
+      titleEl.textContent = "Error";
+      contentEl.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
+          <p class="empty-state__title">Error al cargar</p>
+          <p class="empty-state__text">No se pudo cargar el proyecto. Verifica que el servicio est&eacute; activo.</p>
+          <button class="btn btn--secondary" onclick="appProjectsDetail.reload()">Reintentar</button>
+        </div>
+      `;
+    }
+  }
+
+  function renderDetail() {
+    const pct = progressPercent(project.completed_count, project.task_count);
+    const hasTasks = project.task_count > 0;
+    const pendingTasks = tasks.filter(t => t.status === "pending");
+    const completedTasks = tasks.filter(t => t.status === "completed");
+    const overdueTasks = pendingTasks.filter(t => t.due_date && isOverdue(t.due_date));
+
+    contentEl.innerHTML = `
+      <div class="card" style="margin-bottom:24px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+          <div>
+            <h2 style="margin-top:0; margin-bottom:4px;">${escapeHtml(project.name)}</h2>
+            <span class="badge badge--${statusBadgeClass(project.status)}">${statusLabel(project.status)}</span>
+          </div>
+          <div class="btn-group" id="state-actions">
+            ${projectActions(project.status).map(([action, label]) => `
+              <button class="btn btn--secondary btn--sm" onclick="appProjectsDetail.runAction('${action}')">${label}</button>
+            `).join("")}
+          </div>
+        </div>
+
+        ${project.description ? `
+          <p style="margin-top:12px; color:var(--text-secondary);">${escapeHtml(project.description)}</p>
+        ` : ""}
+
+        <div style="margin-top:16px; display:flex; gap:24px; flex-wrap:wrap;">
+          <div>
+            <div style="font-size:0.875rem; color:var(--text-secondary);">Avance</div>
+            ${hasTasks ? `
+              <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                <span style="font-weight:600;">${project.completed_count}/${project.task_count}</span>
+                <div class="progress" style="min-width:100px; flex:1;" role="progressbar"
+                     aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"
+                     aria-label="Avance del proyecto">
+                  <div class="progress__bar" style="width:${pct}%"></div>
+                </div>
+                <span style="font-weight:600;">${pct}%</span>
+              </div>
+            ` : `<span class="text-secondary">Sin tareas</span>`}
+          </div>
+          <div>
+            <div style="font-size:0.875rem; color:var(--text-secondary);">Tareas vencidas</div>
+            <div style="margin-top:4px; font-weight:600; ${project.overdue_count > 0 ? 'color:var(--danger);' : ''}">
+              ${project.overdue_count}
+            </div>
+          </div>
+          <div>
+            <div style="font-size:0.875rem; color:var(--text-secondary);">Pr&oacute;ximo vencimiento</div>
+            <div style="margin-top:4px; ${project.next_due_date && isFutureDue(project.next_due_date) ? '' : 'color:var(--danger);'}">
+              ${project.next_due_date || "&mdash;"}
+            </div>
+          </div>
+          <div>
+            <div style="font-size:0.875rem; color:var(--text-secondary);">Creado</div>
+            <div style="margin-top:4px; font-size:0.875rem;">${project.created_at.slice(0, 10)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h3 style="margin-top:0;">Editar proyecto</h3>
+        <div class="form-row" style="margin-top:12px;">
+          <div class="form-group" style="flex:2; min-width:260px;">
+            <label for="edit-name">Nombre</label>
+            <input type="text" id="edit-name" value="${escapeHtml(project.name)}" required>
+          </div>
+          <div class="form-group" style="flex:1; min-width:200px;">
+            <label for="edit-desc">Descripci&oacute;n</label>
+            <input type="text" id="edit-desc" value="${escapeHtml(project.description || '')}">
+          </div>
+          <div class="form-group" style="flex:0; min-width:auto; align-self:flex-end;">
+            <button class="btn btn--primary" id="edit-save-btn">Guardar cambios</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+          <h3 style="margin:0;">Tareas (${tasks.length})</h3>
+          <span class="text-secondary" style="font-size:0.875rem;">
+            ${completedTasks.length} completadas &middot; ${pendingTasks.length} pendientes${overdueTasks.length > 0 ? ` &middot; <span class="text-danger">${overdueTasks.length} vencidas</span>` : ""}
+          </span>
+          <button class="btn btn--primary btn--sm" onclick="appProjectsDetail.toggleTaskForm()" id="task-new-btn">+ Nueva tarea</button>
+        </div>
+
+        ${taskFormOpen ? `
+          <form id="task-form" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;" novalidate>
+            <div class="form-row" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+              <div class="form-group" style="flex:2; min-width:240px;">
+                <label for="task-title">T&iacute;tulo <span class="text-secondary" style="font-weight:normal;">(obligatorio)</span></label>
+                <input type="text" id="task-title" placeholder="T&iacute;tulo de la tarea" required maxlength="200">
+              </div>
+              <div class="form-group" style="flex:1; min-width:180px;">
+                <label for="task-desc">Descripci&oacute;n (opcional)</label>
+                <input type="text" id="task-desc" placeholder="Descripci&oacute;n" maxlength="2000">
+              </div>
+              <div class="form-group" style="flex:0; min-width:140px;">
+                <label for="task-priority">Prioridad</label>
+                <select id="task-priority">
+                  <option value="">Sin prioridad</option>
+                  <option value="high">Alta</option>
+                  <option value="normal">Normal</option>
+                  <option value="low">Baja</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex:1; min-width:160px;">
+                <label for="task-due">Vencimiento (opcional)</label>
+                <input type="date" id="task-due">
+              </div>
+            </div>
+            <div class="btn-group" style="margin-top:4px;">
+              <button type="button" class="btn btn--primary" id="task-save-btn" ${creatingTask ? "disabled" : ""}>Crear tarea</button>
+              <button type="button" class="btn btn--secondary" onclick="appProjectsDetail.cancelTaskForm()">Cancelar</button>
+              <span id="task-error" style="color:var(--danger); font-size:0.875rem; margin-left:8px;" role="alert">${taskError || ""}</span>
+            </div>
+          </form>
+        ` : ""}
+
+        ${!taskFormOpen && tasks.length === 0 ? `
+          <div class="empty-state" style="padding:20px;">
+            <div class="empty-state__icon" aria-hidden="true">&#10003;</div>
+            <p class="empty-state__title">Sin tareas</p>
+            <p class="empty-state__text">Este proyecto no tiene tareas asociadas.</p>
+            <button class="btn btn--primary btn--sm" onclick="appProjectsDetail.toggleTaskForm()" style="margin-top:12px;">Crear primera tarea</button>
+          </div>
+        ` : !taskFormOpen ? `
+          <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>T&iacute;tulo</th>
+                <th>Estado</th>
+                <th>Prioridad</th>
+                <th>Vencimiento</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tasks.map(t => `
+                <tr>
+                  <td><strong>${escapeHtml(t.title)}</strong></td>
+                  <td><span class="badge badge--${t.status === "completed" ? "success" : "status"}">${t.status === "completed" ? "Completada" : "Pendiente"}</span></td>
+                  <td>${t.priority ? `<span class="badge badge--priority-${t.priority}">${t.priority === "high" ? "Alta" : t.priority === "normal" ? "Normal" : "Baja"}</span>` : "&mdash;"}</td>
+                  <td>${t.due_date ? (isOverdue(t.due_date) && t.status === "pending" ? `<span class="text-danger">${t.due_date}</span>` : t.due_date) : "&mdash;"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+          </div>
+        ` : ""}
+      </div>
+
+      <div class="card" style="margin-top:24px; border-color:var(--danger);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <h3 style="margin-top:0; margin-bottom:4px; color:var(--danger);">Zona de peligro</h3>
+            <p class="text-secondary" style="margin:0; font-size:0.875rem;">
+              Eliminar un proyecto es permanente. Si tiene tareas, no se podr&aacute; eliminar.
+            </p>
+          </div>
+          <button class="btn btn--danger" onclick="appProjectsDetail.deleteProject()">Eliminar proyecto</button>
+        </div>
+      </div>
+    `;
+
+    // Guardar cambios
+    container.querySelector("#edit-save-btn").addEventListener("click", async () => {
+      const name = container.querySelector("#edit-name").value.trim();
+      const desc = container.querySelector("#edit-desc").value.trim();
+      if (!name) {
+        showToast("El nombre no puede estar vacío", "warning");
+        return;
+      }
+      const body = { name };
+      if (desc) body.description = desc;
+
+      try {
+        const res = await fetch(`${apiBase}/projects/${projectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          showToast("Proyecto actualizado", "success");
+          await load();
+        } else {
+          const err = await res.json();
+          showToast(err.detail || "Error al actualizar", "error");
+        }
+      } catch (error) {
+        showToast("Error de conexión", "error");
+      }
+    });
+
+    const taskSaveBtn = container.querySelector("#task-save-btn");
+    if (taskSaveBtn) {
+      taskSaveBtn.addEventListener("click", async () => {
+        await appProjectsDetail.createTask();
+      });
+    }
+    const taskForm = container.querySelector("#task-form");
+    if (taskForm) {
+      taskForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        appProjectsDetail.createTask();
+      });
+    }
+  }
+
+  window.appProjectsDetail = {
+    async runAction(action) {
+      try {
+        const res = await fetch(`${apiBase}/projects/${projectId}/${action}`, {
+          method: "POST",
+        });
+        if (res.ok) {
+          showToast("Estado actualizado", "success");
+          await load();
+        } else {
+          const err = await res.json();
+          showToast(err.detail || "Error al cambiar estado", "error");
+        }
+      } catch (error) {
+        showToast("Error de conexión", "error");
+      }
+    },
+
+    async deleteProject() {
+      const confirmed = await showConfirm({
+        title: "Eliminar proyecto",
+        text: `&iquest;Eliminar el proyecto "${escapeHtml(project.name)}"? Esta acci&oacute;n lo elimina permanentemente (solo si no tiene tareas asociadas).`,
+        confirmLabel: "Eliminar",
+        danger: true,
+      });
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch(`${apiBase}/projects/${projectId}`, {
+          method: "DELETE",
+        });
+        if (res.ok || res.status === 204) {
+          showToast("Proyecto eliminado", "success");
+          window.location.hash = "#/projects";
+        } else {
+          const err = await res.json();
+          showToast(err.detail || "Error al eliminar proyecto", "error");
+        }
+      } catch (error) {
+        showToast("Error de conexión", "error");
+      }
+    },
+
+    editProject() {
+      const el = container.querySelector("#edit-name");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth" });
+        el.focus();
+      }
+    },
+
+    reload() {
+      load();
+    },
+
+    toggleTaskForm() {
+      taskFormOpen = !taskFormOpen;
+      taskError = "";
+      renderDetail();
+    },
+
+    cancelTaskForm() {
+      taskFormOpen = false;
+      taskError = "";
+      renderDetail();
+    },
+
+    async createTask() {
+      if (creatingTask) return;
+      const title = container.querySelector("#task-title").value.trim();
+      const desc = container.querySelector("#task-desc").value.trim();
+      const priority = container.querySelector("#task-priority").value;
+      const due = container.querySelector("#task-due").value;
+
+      if (!title) {
+        taskError = "El t&iacute;tulo de la tarea no puede estar vac&iacute;o.";
+        renderDetail();
+        const el = container.querySelector("#task-title");
+        if (el) el.focus();
+        return;
+      }
+
+      const body = { project_id: projectId, title };
+      if (desc) body.description = desc;
+      if (priority) body.priority = priority;
+      if (due) body.due_date = due;
+
+      creatingTask = true;
+      taskError = "";
+      renderDetail();
+
+      try {
+        const res = await fetch(`${apiBase}/tasks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        if (res.ok) {
+          taskFormOpen = false;
+          creatingTask = false;
+          taskError = "";
+          showToast("Tarea creada", "success");
+          await load();
+        } else {
+          creatingTask = false;
+          const err = await res.json();
+          taskError = err.detail || "Error al crear tarea";
+          renderDetail();
+          const el = container.querySelector("#task-title");
+          if (el) el.focus();
+        }
+      } catch (error) {
+        creatingTask = false;
+        taskError = "Error de conexi&oacute;n";
+        renderDetail();
+      }
+    },
+  };
+
+  await load();
 }
