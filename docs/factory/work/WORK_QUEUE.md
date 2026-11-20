@@ -1,78 +1,40 @@
 # WORK_QUEUE — Cola central de trabajo
 
-**Propósito:** Registro central de tareas, responsables, estados y dependencias.
-**Mantenimiento:** Coordinator actualiza; Product Owner prioriza.
+**Actualizada:** 20 de noviembre de 2026. Coordinator mantiene; PO prioriza.
 
-## Estados posibles
+## Estados
+READY = especificada y autorizada; PLANNING = solo diseño; IN_PROGRESS = ejecución; REVIEW = revisión/aceptación; APPROVED = aceptada; DONE = cerrada; BLOCKED = decisión/dependencia; CANCELLED = cancelada.
 
-| Estado | Significado |
-|--------|-------------|
-| `BACKLOG` | Creada, no asignada |
-| `PLANNING` | En planificación |
-| `IN_PROGRESS` | En implementación |
-| `REVIEW` | En revisión |
-| `APPROVED` | Aprobada por PO, pendiente de cierre |
-| `DONE` | Completada y cerrada |
-| `BLOCKED` | Bloqueada por dependencia o decisión |
-| `CANCELLED` | Cancelada por PO |
+## Completadas en main
+- FACTORY-001: estructura factory.
+- UX-001: auditoría inicial (informe presentado; no todos los artefactos originales versionados).
+- PRJ-001: métricas y detalle, commit afaf6cde2e72d00d72d317711d0c2d3fb442270e.
+- PRJ-002: crear tareas desde proyecto, mismo commit.
+- HAB-001: calendario compacto, commit 27791fc8a157a8733f5bb322a7f19c845a251995.
 
-## Formato de entrada
+## Fase 9 — READY
+### STAB-001 — QA manual Fase 8
+Prioridad P0 · Reviewer Mimo · Spec STAB-001/SPEC.md · Solo revisión, no código.
 
-```
-### [ID]: [Título]
-- **Estado:** [BACKLOG / PLANNING / IN_PROGRESS / REVIEW / APPROVED / DONE / BLOCKED / CANCELLED]
-- **Prioridad:** P0 / P1 / P2
-- **Rol responsable:** [Developer / Reviewer / UX Designer / Auditor / Coordinator]
-- **Asignado a:** [nombre del agente, ej. Nemo, Claude, Mimo]
-- **Dependencias:** [IDs de tareas dependientes o "ninguna"]
-- **Fecha creada:** YYYY-MM-DD
-- **Notas:** [contexto relevante]
-```
+### BUG-001 — Conservar formulario ante error
+Prioridad P0 · Developer Nemo · Spec BUG-001/SPEC.md · Reproducir antes de corregir.
 
----
+### HOME-001 — Home como centro de operaciones
+Prioridad P0 · Developer Nemo · Depende de STAB-001/BUG-001 · Spec HOME-001/SPEC.md.
 
-## Tareas activas
+### TASK-001 — Espacio de trabajo de Tareas
+Prioridad P1 · Developer Nemo · Secuencial después de HOME-001 · Spec TASK-001/SPEC.md.
 
-### UX-001: Auditoría UX de Home, Habits, Projects y Tasks
-- **Estado:** DONE
-- **Prioridad:** P0
-- **Rol responsable:** UX Designer
-- **Asignado a:** Claude
-- **Dependencias:** ninguna
-- **Fecha creada:** 2026-11-20
-- **Notas:** Auditoría completada. Informe presentado con 3 alternativas de rediseño. Pendiente: aprobación de PO para implementar backlog.
+## Revisión
+### UX-REVIEW-001
+PLANNING · Reviewer Mimo · Después de HOME-001 y TASK-001.
 
-### FACTORY-001: Crear estructura docs/factory/
-- **Estado:** DONE
-- **Prioridad:** P1
-- **Rol responsable:** Developer
-- **Asignado a:** Nemo
-- **Dependencias:** ninguna
-- **Fecha creada:** 2026-11-20
-- **Notas:** Estructura creada con roles, flujos, plantillas, decisiones y cola de trabajo.
+## Diseño futuro — no autoriza código
+### PRJ-PLAN-001
+PLANNING · Diseño de hitos, entregables, planificación y progreso real · Spec PRJ-PLAN-001/DESIGN_TASK.md.
 
----
+### ANALYTICS-001
+PLANNING · Catálogo, historial y semántica temporal · Depende de PRJ-PLAN-001 · Spec ANALYTICS-001/DESIGN_TASK.md.
 
-## Tareas pendientes (sin asignar)
-
-### UX-002: Implementar backlog P0 de auditoría UX
-- **Estado:** BACKLOG
-- **Prioridad:** P0
-- **Rol responsable:** Developer + UX Designer
-- **Asignado a:** (sin asignar)
-- **Dependencias:** UX-001
-- **Fecha creada:** 2026-11-20
-- **Notas:** Requiere aprobación de PO. Incluye: Home jerárquico, racha en calendario, salud de proyectos, búsqueda global, separación de Settings.
-
-### FASE-9: Siguiente fase del roadmap
-- **Estado:** BACKLOG
-- **Prioridad:** P1
-- **Rol responsable:** (sin definir)
-- **Asignado a:** (sin asignar)
-- **Dependencias:** UX-002 (recomendado)
-- **Fecha creada:** 2026-11-20
-- **Notas:** Pendiente de definición por PO. No iniciar sin autorización.
-
----
-
-*(Agregar nuevas entradas debajo de esta línea)*
+## Regla
+Cada tarea entrega pruebas reales y handoff. No push ni merge. PO acepta el cierre.
