@@ -34,16 +34,18 @@ Si hay cambios locales, conflictos o archivos desconocidos, no ejecutar stash, r
 
 El Product Owner autorizó ejecutar autónomamente las tareas READY de Fase 9 que tengan especificación. No solicitar confirmación para decisiones rutinarias dentro de esos límites.
 
-Orden:
-1. STAB-001 — QA manual de Fase 8.
-2. BUG-001 — conservar formulario ante error.
-3. HOME-001 — Home como centro de operaciones.
-4. TASK-001 — mejorar el espacio de trabajo de Tareas.
-5. UX-REVIEW-001 — revisión independiente.
+Orden de trabajo y responsabilidades:
+1. STAB-001 — Mimo completa la revisión independiente de Fase 8. Solo revisión, sin código.
+2. BUG-001 — Nemo corrige la pérdida de estado del formulario ante error.
+3. HAB-002 — Mimo toma temporalmente el rol Developer asignado por el PO; Nemo hace la revisión independiente. Implementa semana interactiva y calendarios por hábito.
+4. PRJ-UI-001 — Mimo como Developer; Nemo como Reviewer. Mantiene la lista de tareas visible al abrir el formulario del proyecto. Esperar a BUG-001 para no solapar cambios en projects.js.
+5. HOME-001 — Nemo; esperar HAB-002 por solapamiento en home.js.
+6. TASK-001 — Nemo, después de HOME-001.
+7. UX-REVIEW-001 — Mimo realiza la revisión independiente después de HOME-001 y TASK-001.
 
-Si Mimo está disponible, debe realizar la revisión independiente. Si no, el Developer puede ejecutar verificaciones propias, pero debe declarar que no hubo revisión independiente.
+La asignación de rol es por tarea. Mimo primero debe completar STAB-001 como Reviewer; luego puede asumir Developer únicamente en HAB-002 y PRJ-UI-001. No debe revisar su propia implementación: Nemo es el Reviewer de esas dos entregas.
 
-Después, puede avanzar en PRJ-PLAN-001 y ANALYTICS-001 como documentos de diseño. No autorizan código ni migraciones.
+PRJ-WORKSPACE-001, PRJ-PLAN-001 y ANALYTICS-001 siguen siendo PLANNING: autorizan diseño/documentación solamente, nunca código ni migraciones.
 
 ## 4. Autonomía y límites
 
