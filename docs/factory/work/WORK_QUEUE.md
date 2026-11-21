@@ -1,6 +1,6 @@
 # WORK_QUEUE — Cola central de trabajo
 
-**Actualizada:** 20 de noviembre de 2026. Coordinator mantiene; PO prioriza.
+**Actualizada:** 21 de noviembre de 2026. Coordinator mantiene; PO prioriza.
 
 ## Estados
 READY = especificada y autorizada; PLANNING = solo diseño; IN_PROGRESS = ejecución; REVIEW = revisión/aceptación; APPROVED = aceptada; DONE = cerrada; BLOCKED = decisión/dependencia; CANCELLED = cancelada.
