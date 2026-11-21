@@ -1,6 +1,6 @@
 # WORK_QUEUE — Cola central de trabajo
 
-**Actualizada:** 20 de noviembre de 2026. Coordinator mantiene; PO prioriza.
+**Actualizada:** 21 de noviembre de 2026. Coordinator mantiene; PO prioriza.
 
 ## Estados
 READY = especificada y autorizada; PLANNING = solo diseño; IN_PROGRESS = ejecución; REVIEW = revisión/aceptación; APPROVED = aceptada; DONE = cerrada; BLOCKED = decisión/dependencia; CANCELLED = cancelada.
@@ -14,19 +14,19 @@ READY = especificada y autorizada; PLANNING = solo diseño; IN_PROGRESS = ejecuc
 
 ## Fase 9 — READY
 ### STAB-001 — QA manual Fase 8
-- **Estado:** REVIEW
-- **Prioridad:** P0
-- **Rol responsable:** Reviewer — Mimo
-- **Asignado a:** Developer (ejecución de QA propia)
-- **Dependencias:** ninguna
-- **Fecha creada:** 2026-11-20
-- **Notas:** Spec STAB-001/SPEC.md · Solo revisión, no código. QA ejecutada contra main (commit 27791fc) con base temporal en LIFEOS_DATA_DIR. Verificado: health, proyectos, métricas, creación de tarea desde proyecto (PRJ-002), transiciones de estado, manejo de errores (422/404), calendario de hábitos (HAB-001), frontend servido. Pruebas: 139/139 pytest, ruff OK, node --check OK. Pendiente: revisión visual en navegador (1440×900, 768×1024, 390×844) y revisión independiente por Mimo.
+Prioridad P0 · Reviewer Mimo · Spec STAB-001/SPEC.md · Solo revisión, no código. **Estado: REVIEW** (QA de Nemo + revisión visual independiente de Mimo en curso). Completar antes de que Mimo tome tareas de implementación. Notas: QA de Nemo contra main (27791fc) con base temporal — 139/139 pytest, ruff OK, node --check OK; flujos API verificados. Revisión visual de Mimo: Edge headless vía CDP en 1440×900, 768×1024, 390×844.
 
 ### BUG-001 — Conservar formulario ante error
 Prioridad P0 · Developer Nemo · Spec BUG-001/SPEC.md · Reproducir antes de corregir.
 
+### HAB-002 — Semana interactiva y calendarios por hábito
+Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo · Depende de STAB-001 para liberar a Mimo de la revisión independiente · Spec HAB-002/SPEC.md.
+
+### PRJ-UI-001 — Mantener las tareas visibles al abrir el formulario
+Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo · Después de BUG-001 para evitar solapamiento en projects.js · Spec PRJ-UI-001/SPEC.md.
+
 ### HOME-001 — Home como centro de operaciones
-Prioridad P0 · Developer Nemo · Depende de STAB-001/BUG-001 · Spec HOME-001/SPEC.md.
+Prioridad P0 · Developer Nemo · Depende de STAB-001/BUG-001 y de HAB-002 por solapamiento en home.js · Spec HOME-001/SPEC.md.
 
 ### TASK-001 — Espacio de trabajo de Tareas
 Prioridad P1 · Developer Nemo · Secuencial después de HOME-001 · Spec TASK-001/SPEC.md.
@@ -39,8 +39,11 @@ PLANNING · Reviewer Mimo · Después de HOME-001 y TASK-001.
 ### PRJ-PLAN-001
 PLANNING · Diseño de hitos, entregables, planificación y progreso real · Spec PRJ-PLAN-001/DESIGN_TASK.md.
 
+### PRJ-WORKSPACE-001 — Proyecto como espacio de trabajo
+PLANNING · Diseño de arquitectura funcional e información del proyecto (resumen, tareas, notas, documentos/recursos y seguimiento) · Spec PRJ-WORKSPACE-001/DESIGN_TASK.md · No implementar.
+
 ### ANALYTICS-001
 PLANNING · Catálogo, historial y semántica temporal · Depende de PRJ-PLAN-001 · Spec ANALYTICS-001/DESIGN_TASK.md.
 
 ## Regla
-Cada tarea entrega pruebas reales y handoff. No push ni merge. PO acepta el cierre.
+Cada tarea entrega pruebas reales y handoff. Todo commit de implementación debe hacerse push a la rama remota de trabajo asignada y verificarse; no hacer merge ni push a main. PO acepta el cierre.
