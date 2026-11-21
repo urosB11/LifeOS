@@ -72,3 +72,59 @@ node --check frontend/assets/js/projects.js habits.js app.js → JS OK
 - STAB-001: REVIEW (pendiente de aceptación por PO)
 - BUG-001: READY (siguiente en la cola)
 - HOME-001: READY (bloqueada por STAB-001 y BUG-001)
+
+---
+
+# Revisión independiente — Reviewer (Mimo)
+
+**Fecha:** 2026-11-21 · **Veredicto: REJECT** (la validación de Fase 8 no pasa; ver hallazgos)
+
+## Qué se hizo
+
+Revisión independiente sobre la QA del Developer. Navegador real: Edge headless vía Chrome DevTools Protocol (sin dependencias nuevas), servidor Uvicorn en `127.0.0.1:8001` con `LIFEOS_DATA_DIR` temporal (nunca la base personal) y `alembic upgrade head`. Datos semilla: 2 proyectos (uno con tareas, uno vacío), 1 hábito, 1 nota. Matriz completa: 8 pantallas × 3 viewports (1440×900, 768×1024, 390×844) = 24 capturas, más flujos de interacción (formulario, errores, modal, foco, teclado, calendario, navegación móvil, estados vacíos/404).
+
+## Hallazgos por severidad
+
+### ALTA
+
+1. **[NUEVA — no está en la cola] Overflow horizontal en móvil (390×844) en 5 pantallas:** `#/projects` (scrollWidth 711 vs 390), `#/projects/:id` (509), `#/tasks` (703), `#/habits` (551), `#/notes` (541). Desktop y tablet sin overflow. Causa raíz identificada empíricamente: `.main { margin: 0 auto }` (app.css:170) es hijo de `.app-content` (`display:flex; flex-direction:column`); los márgenes `auto` en el eje cruzado desactivan el stretch, por lo que `main` se dimensiona por su contenido (≈711px, el ancho mínimo de la tabla de proyectos) en vez del ancho del contenedor (390px). Al no estar `main` constreñido, `.table-wrap` (`overflow-x:auto`) recibe un ancho igual al de la tabla y su scroll interno no se activa. Verificado en vivo: con `margin:0` → 390px; `align-self:stretch` solo no basta (los `auto` tienen prioridad). **Recomendación:** crear tarea de cola para corregirlo (no incluido en BUG-001 ni PRJ-UI-001).
+2. **[CONFIRMADA — ya en cola como BUG-001, P0] Campos del formulario se limpian tras error de validación.** Reproducción: detalle de proyecto → "+ Nueva tarea" → descripción y prioridad cargadas → título vacío → "Crear tarea". El formulario permanece abierto y muestra el mensaje de error ("El título de la tarea no puede estar vacío."), pero `description` y `priority` quedan vacías. Coincide con el análisis de código: `createTask()` llama a `renderDetail()` que regenera el `innerHTML` sin enlazar valores al estado.
+
+### MEDIA
+
+3. **[CONFIRMADA — ya en cola como PRJ-UI-001, P1] Las tareas existentes desaparecen del DOM con el formulario abierto** (0 filas de tabla). La cabecera "Tareas (3)" y el resumen 1 completadas · 2 pendientes · 1 vencida sí permanecen visibles. Es exactamente el problema que PRJ-UI-001 debe corregir.
+4. **[NUEVA] El foco no se restaura al cerrar el modal con ESC.** El modal se abre correctamente y el foco entra en él (`document.activeElement` dentro del modal), ESC lo cierra, pero después `activeElement` queda en `BODY` (no vuelve al botón que lo abrió).
+5. **[OBSERVACIÓN] Celdas del calendario de hábitos de 28px** (medido en desktop, `.cal-day`). Consistente con el objetivo "calendario compacto" de HAB-001; el SPEC de STAB-001 no fija tamaño objetivo, por lo que no lo clasifico como defecto.
+
+### BAJA
+
+6. `GET /favicon.ico` → 404 en consola (solo en la primera carga de Home). No afecta funcionalidad.
+
+## Verificaciones independientes (no me limité a leer el reporte de Nemo)
+
+| Verificación | Resultado |
+|---|---|
+| `pytest -q` | ✅ 139 passed (1 warning, 161.88s) |
+| `ruff check app tests` | ✅ All checks passed |
+| `node --check` (7 archivos JS) | ✅ OK |
+| Handoff de Nemo vs mi ejecución | ✅ Coincide en health, CRUD, 422/404, métricas, calendario, frontend servido |
+
+## Flujos verificados OK (positivos)
+
+- Formulario de tarea: abrir, cancelar, reabrir ✅
+- Crear tarea válida: toast "Tarea creada", formulario se cierra, contadores actualizados (`Tareas (4)`, 1/4), sin duplicados ✅
+- Modal de eliminación: abre, el foco entra al modal, ESC lo cierra ✅
+- Teclado: Tab navega por la navegación y formularios; foco visible (`:focus-visible` con outline) ✅
+- Calendario: cambio de mes (noviembre→diciembre), selector de hábito y leyenda presentes ✅
+- Navegación móvil: listado → detalle → volver ✅
+- Estados: proyecto vacío ("Sin tareas" + CTA) y proyecto inexistente ("Proyecto no encontrado") ✅
+- Sin errores de consola funcionales (además del favicon) ✅
+
+## Limitaciones declaradas
+
+- QA visual ejecutada en Edge **headless** vía CDP (no hay navegador gráfico interactivo en este entorno). Es un navegador real de motor Chromium, pero la revisión "a ojo" de animaciones/paletas se hizo sobre capturas PNG estáticas.
+- La primera ejecución del script de QA tuvo dos fallos propios (timeout de CDP y selector mal formado) que produjeron un falso positivo de BUG-001; fue corregida y re-ejecutada. El hallazgo 2 arriba proviene de la ejecución corregida.
+
+## Veredicto
+
+**REJECT** para la validación de Fase 8: 1 hallazgo ALTA nuevo no contemplado en la cola (overflow móvil) más 2 defectos ALTA/P0 ya confirmados (BUG-001, PRJ-UI-001). La funcionalidad de fondo (API, métricas, flujos) está sólida; el rechazo se debe a los defectos de UI. STAB-001 queda en REVIEW hasta aceptación del PO. **Se recomienda al PO:** agregar tarea para el overflow móvil y decidir si BUG-001/PRJ-UI-001 se liberan para ejecución.

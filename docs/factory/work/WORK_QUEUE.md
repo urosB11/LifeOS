@@ -14,7 +14,7 @@ READY = especificada y autorizada; PLANNING = solo diseño; IN_PROGRESS = ejecuc
 
 ## Fase 9 — READY
 ### STAB-001 — QA manual Fase 8
-Prioridad P0 · Reviewer Mimo · Spec STAB-001/SPEC.md · Solo revisión, no código. **Estado: REVIEW** (QA de Nemo + revisión visual independiente de Mimo en curso). Completar antes de que Mimo tome tareas de implementación. Notas: QA de Nemo contra main (27791fc) con base temporal — 139/139 pytest, ruff OK, node --check OK; flujos API verificados. Revisión visual de Mimo: Edge headless vía CDP en 1440×900, 768×1024, 390×844.
+Prioridad P0 · Reviewer Mimo · Spec STAB-001/SPEC.md · Solo revisión, no código. **Estado: REVIEW — veredicto de Mimo: REJECT** (2026-11-21). QA de Nemo verificado independientemente (139/139 pytest, ruff OK, node --check OK) + revisión visual Edge headless/CDP en 1440×900, 768×1024, 390×844. Hallazgos: ALTA overflow horizontal móvil en 5 pantallas (causa: `.main{margin:0 auto}` en flex column de `.app-content` — **no contemplado en la cola, requiere tarea nueva**); ALTA confirmada BUG-001 (campos perdidos tras error); MEDIA confirmada PRJ-UI-001 (tareas fuera del DOM con formulario abierto); MEDIA foco no restaurado al cerrar modal con ESC; BAJA favicon 404. Detalle en STAB-001/HANDOFF.md. Pendiente: aceptación del PO.
 
 ### BUG-001 — Conservar formulario ante error
 Prioridad P0 · Developer Nemo · Spec BUG-001/SPEC.md · Reproducir antes de corregir.
