@@ -17,6 +17,8 @@ Antes de cambiar de rama:
 
 Si hay cambios locales, conflictos o archivos desconocidos, no ejecutar stash, reset, clean, checkout destructivo ni sobrescritura automática. Detenerse y reportar.
 
+**Precaución conocida de STAB-001:** el commit local `f99722d` y el archivo no trackeado `contexto_lifeos.txt` fueron reportados previamente y no se confirmó que el commit estuviera en el remoto. Antes de sincronizar, comparar explícitamente los hashes local/remoto y los commits ahead/behind. Preservar ambos elementos si siguen presentes. Si existe divergencia, no intentar push directo, rebase, merge ni force push; informar hashes y divergencia al PO para decidir cómo reconciliar. No perder el trabajo de QA.
+
 ## 2. Orden de lectura
 
 1. AGENTS.md
