@@ -6,7 +6,7 @@
 
 La documentación de evolución se encuentra en la rama remota product/lifeos-evolution, creada desde main en el commit 27791fc8a157a8733f5bb322a7f19c845a251995.
 
-Trabajar únicamente en esa rama. No implementar directamente en main.
+Trabajar únicamente en esa rama, salvo asignación expresa del PO. No implementar directamente en main.
 
 Antes de cambiar de rama:
 1. ejecutar git status --short;
@@ -52,10 +52,13 @@ Autorizado:
 - corregir defectos directamente relacionados;
 - agregar pruebas;
 - actualizar documentación técnica afectada;
-- commits locales de checkpoint en product/lifeos-evolution después de pruebas.
+- crear commits locales de checkpoint después de verificar las pruebas;
+- hacer push obligatorio de esos commits a la rama remota de trabajo asignada.
 
 No autorizado:
-- push, merge a main o publicación;
+- push a main;
+- merge a main o a ramas ajenas;
+- force push o reescritura destructiva de historia;
 - migraciones, nuevos modelos o cambios de esquema;
 - dependencias/frameworks o cambios de arquitectura;
 - IA runtime, proveedores externos o integraciones;
@@ -63,6 +66,8 @@ No autorizado:
 - modificar datos personales o secretos;
 - borrar archivos no trackeados o cambios ajenos;
 - cambiar visión, alcance, seguridad o requisitos por iniciativa propia.
+
+El push a la rama de trabajo asignada es parte obligatoria del trabajo y no requiere autorización adicional. Merge, release y despliegue sí requieren autorización expresa del PO.
 
 Ante un límite no autorizado, detener esa parte, documentar alternativas y continuar con tareas READY independientes.
 
@@ -78,7 +83,7 @@ Ante un límite no autorizado, detener esa parte, documentar alternativas y cont
 - Mantener estados de carga, vacío, error, éxito y confirmación.
 - Mantener semántica, foco, teclado y responsive.
 
-## 6. Verificación
+## 6. Verificación y publicación obligatoria
 
 Según los archivos afectados:
 - pytest -q desde backend;
@@ -88,12 +93,22 @@ Según los archivos afectados:
 - revisión visual 1440×900, 768×1024 y 390×844;
 - teclado, foco, consola y overflow.
 
+Para cada tarea o checkpoint seguro:
+1. revisar git diff y git status;
+2. ejecutar las pruebas pertinentes y registrar sus resultados reales;
+3. crear un commit descriptivo en la rama asignada;
+4. ejecutar git push -u origin <rama> la primera vez, o git push origin <rama> en adelante;
+5. verificar con git status y git rev-parse HEAD que el commit publicado es el esperado; si hace falta, comprobar también origin/<rama>;
+6. no continuar como si estuviera publicado si el push falló.
+
+No usar force push. Si el remoto avanzó o el push es rechazado, preservar el trabajo y reportar la divergencia para resolverla sin perder cambios ajenos.
+
 Antes de entregar:
-- revisar git diff y git status;
 - listar archivos modificados;
 - incluir comandos exactos y resultados reales;
 - separar comprobado, supuesto y pendiente;
-- declarar si la revisión fue independiente.
+- declarar si la revisión fue independiente;
+- informar rama, hash del commit y estado verificable del push.
 
 ## 7. Entrega
 
@@ -101,11 +116,12 @@ Al terminar:
 1. actualizar WORK_QUEUE.md;
 2. completar templates/handoff-template.md;
 3. dejar en REVIEW, no DONE;
-4. crear commit local si todas las pruebas pasan;
-5. no hacer push.
+4. crear commit y hacer push a la rama asignada;
+5. verificar que el remoto contiene el commit;
+6. no hacer merge.
 
-El Product Owner acepta la entrega y decide publicación.
+El Product Owner acepta la entrega y decide merge/publicación.
 
 ## 8. Si se agota el contexto
 
-No comenzar otra tarea si no se puede terminar de forma segura la actual. Dejar un handoff preciso y no afirmar que está terminada si faltan pruebas.
+No comenzar otra tarea si no se puede terminar de forma segura la actual. Dejar un handoff preciso. Publicar un checkpoint seguro en la rama de trabajo para que el siguiente agente pueda continuar; si no es posible hacer push, explicar exactamente por qué. No afirmar que está terminada si faltan pruebas.
