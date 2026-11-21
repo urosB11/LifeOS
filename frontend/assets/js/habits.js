@@ -5,6 +5,12 @@
 // esta vista solo pinta y envía acciones. Usa componentes de 8A.
 
 import { showToast, showConfirm } from "./app.js";
+import {
+  deriveHabitDayState,
+  habitLegendHtml,
+  habitStateLabel,
+  openHabitEntryEditor,
+} from "./habit-entry.js";
 
 const MONTHS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -150,9 +156,10 @@ export async function renderHabitsView(container, apiBase) {
       <section class="card habits-calendar" style="margin-top:24px;">
         <div class="cal-header">
           <div class="cal-header__title">
-            <h3 style="margin:0;">Calendario</h3>
-            <label class="sr-only" for="cal-habit">Hábito del calendario</label>
-            <select id="cal-habit" style="max-width:220px;"></select>
+            <h3 style="margin:0;">Calendarios</h3>
+            <p class="subtitle" style="margin:0;">
+              Un calendario por h&aacute;bito activo o pausado, sincronizados en el mes.
+            </p>
           </div>
           <div class="cal-nav">
             <button type="button" class="btn btn--secondary btn--sm" id="cal-prev"
@@ -168,13 +175,7 @@ export async function renderHabitsView(container, apiBase) {
             <p class="empty-state__title">Cargando&hellip;</p>
           </div>
         </div>
-        <ul class="cal-legend">
-          <li><span class="cal-swatch cal-day--done"></span>Cumplido</li>
-          <li><span class="cal-swatch cal-day--partial"></span>Registrado sin completar</li>
-          <li><span class="cal-swatch cal-day--skipped"></span>Omitido</li>
-          <li><span class="cal-swatch cal-day--missed"></span>Pendiente de registrar</li>
-          <li><span class="cal-swatch cal-day--off"></span>No programado</li>
-        </ul>
+        <ul class="cal-legend">${habitLegendHtml("cal")}</ul>
       </section>
 
       <h2 style="margin-top:28px;">Todos los hábitos</h2>
@@ -205,7 +206,6 @@ export async function renderHabitsView(container, apiBase) {
   const statsEl = view.querySelector("#habits-stats");
   const manageEl = view.querySelector("#habits-manage");
   const calendarGridEl = view.querySelector("#calendar-grid");
-  const calHabitEl = view.querySelector("#cal-habit");
   const calMonthEl = view.querySelector("#cal-month");
   const formEl = view.querySelector("#habit-form");
   const freqEl = view.querySelector("#hf-frequency");
@@ -216,7 +216,10 @@ export async function renderHabitsView(container, apiBase) {
   let habits = [];
   let todayItems = [];
   let editingId = null;
-  const calendar = { habitId: null, year: null, month: null };
+  // Mes compartido por todos los calendarios (HAB-002 §2).
+  const calendar = { year: null, month: null };
+  // Datos del mes en pantalla por hábito, para abrir el editor desde una celda.
+  let calCache = { month: null, daysByHabit: new Map() };
 
   // --- Utilidades --------------------------------------------------------
 
@@ -426,97 +429,112 @@ export async function renderHabitsView(container, apiBase) {
       </p>`;
   }
 
-  // --- Calendario ---------------------------------------------------------
-
-  function renderCalendarSelect() {
-    const options = habits
-      .filter((h) => h.status !== "archived")
-      .map((h) => `<option value="${h.id}">${esc(h.name)}</option>`)
-      .join("");
-    calHabitEl.innerHTML = options || `<option value="">Sin hábitos</option>`;
-    if (calendar.habitId && habitById(calendar.habitId)) {
-      calHabitEl.value = calendar.habitId;
-    } else if (habits.length) {
-      const first = habits.find((h) => h.status !== "archived") || habits[0];
-      calendar.habitId = first.id;
-      calHabitEl.value = first.id;
-    }
-  }
+  // --- Calendario (HAB-002: un calendario por hábito, mes compartido) -----
 
   async function renderCalendar() {
-    if (!calendar.habitId) {
+    const monthStr = `${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}`;
+    calMonthEl.textContent = `${MONTHS[calendar.month]} ${calendar.year}`;
+    const list = habits.filter((h) => h.status !== "archived");
+    if (!list.length) {
+      calCache = { month: monthStr, daysByHabit: new Map() };
       calendarGridEl.innerHTML = `<div class="empty-state">
         <div class="empty-state__icon" aria-hidden="true">&#128197;</div>
         <p class="empty-state__title">Sin hábitos</p>
         <p class="empty-state__text">Crea un hábito para ver su calendario.</p>
       </div>`;
-      calMonthEl.textContent = "";
       return;
     }
-    const monthStr = `${calendar.year}-${String(calendar.month + 1).padStart(2, "0")}`;
-    calMonthEl.textContent = `${MONTHS[calendar.month]} ${calendar.year}`;
     calendarGridEl.innerHTML = `<div class="empty-state">
       <div class="empty-state__icon" aria-hidden="true">&#8987;</div>
       <p class="empty-state__title">Cargando&hellip;</p>
     </div>`;
-    try {
-      const data = await api(`/habits/${calendar.habitId}/calendar?month=${monthStr}`);
-      drawCalendar(data);
-    } catch (error) {
+    const results = await Promise.all(
+      list.map((habit) =>
+        api(`/habits/${habit.id}/calendar?month=${monthStr}`)
+          .then((data) => ({ habit, data }))
+          .catch((error) => ({ habit, error }))
+      )
+    );
+    const ok = results.filter((r) => r.data);
+    if (!ok.length) {
+      calCache = { month: monthStr, daysByHabit: new Map() };
       calendarGridEl.innerHTML = `<div class="empty-state">
         <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
         <p class="empty-state__title">Error</p>
-        <p class="empty-state__text">No se pudo cargar el calendario. ${esc(error.message)}</p>
+        <p class="empty-state__text">No se pudieron cargar los calendarios.</p>
       </div>`;
+      return;
     }
+    calCache = {
+      month: monthStr,
+      daysByHabit: new Map(ok.map((r) => [r.habit.id, r.data])),
+    };
+    drawCalendars(results);
   }
 
-  function drawCalendar(data) {
+  function drawCalendars(results) {
+    const monthLabel = `${MONTHS[calendar.month]} ${calendar.year}`;
+    const cards = results
+      .map(({ habit, data, error }) => {
+        const head = `
+        <div class="cal-card__head">
+          <span class="habit-dot ${dotClass(habit.color)}" aria-hidden="true"></span>
+          <span class="cal-card__name" title="${esc(habit.name)}">${esc(habit.name)}</span>
+          ${habit.status === "paused" ? `<span class="badge badge--warning">Pausado</span>` : ""}
+        </div>`;
+        if (error) {
+          return `<div class="cal-card">${head}
+            <div class="empty-state">
+              <p class="empty-state__title">Error</p>
+              <p class="empty-state__text">No se pudo cargar este calendario. ${esc(error.message)}</p>
+            </div>
+          </div>`;
+        }
+        return `<div class="cal-card">${head}${calGridHtml(habit, data, monthLabel)}</div>`;
+      })
+      .join("");
+    calendarGridEl.innerHTML = `<div class="cal-grid">${cards}</div>`;
+  }
+
+  function calGridHtml(habit, data, monthLabel) {
     const first = new Date(`${data.days[0].date}T00:00:00`);
     const lead = (first.getDay() + 6) % 7; // lunes = 0
-    const monthLabel = MONTHS[Number(data.month.slice(5, 7)) - 1];
-    const stateText = {
-      completed: "cumplido",
-      pending: "registrado sin completar",
-      skipped: "omitido",
-    };
 
     let cells = "";
     for (let i = 0; i < lead; i += 1) {
-      cells += `<div class="cal-day cal-day--empty" aria-hidden="true"></div>`;
+      cells += `<div class="cal-day cal-day--empty" role="gridcell" aria-hidden="true"></div>`;
     }
     for (const day of data.days) {
       const dayNum = Number(day.date.slice(8, 10));
-      const future = day.date > data.today;
-      let cls = "";
-      let text = "";
-      if (!day.scheduled) {
-        cls = "cal-day--off";
-        text = "no programado";
-      } else if (day.entry_status) {
-        cls = `cal-day--${day.entry_status === "completed" ? "done" : day.entry_status === "skipped" ? "skipped" : "partial"}`;
-        text = stateText[day.entry_status];
-      } else if (future) {
-        cls = "cal-day--future";
-        text = "programado";
-      } else {
-        cls = "cal-day--missed";
-        text = "pendiente de registrar";
-      }
+      const state = deriveHabitDayState(day, data.today);
       const isToday = day.date === data.today;
-      cells += `
-        <div class="cal-day ${cls}${isToday ? " cal-day--today" : ""}"
-             role="gridcell"
-             aria-label="${dayNum} de ${monthLabel}: ${text}">
+      const editable = state !== "off" && state !== "future";
+      const label = `${dayNum} de ${monthLabel}: ${habitStateLabel(state)}`;
+      const todayClass = isToday ? " cal-day--today" : "";
+      if (editable) {
+        // Fechas programadas de hoy o anteriores: editables (HAB-002 §2).
+        cells += `
+        <button type="button" class="cal-day hstate--${state}${todayClass}"
+                role="gridcell" data-action="cal-edit"
+                data-id="${habit.id}" data-date="${day.date}"
+                aria-label="${esc(label)}. Editar registro">
+          <span aria-hidden="true">${dayNum}</span>
+        </button>`;
+      } else {
+        // Futuro: gris sin interacción. No programado: vacío.
+        cells += `
+        <div class="cal-day hstate--${state}${todayClass}" role="gridcell"
+             aria-label="${esc(label)}">
           <span aria-hidden="true">${dayNum}</span>
         </div>`;
+      }
     }
-    calendarGridEl.innerHTML = `
-      <div class="cal" role="grid" aria-label="Calendario de ${monthLabel}">
+    return `
+      <div class="cal" role="grid" aria-label="Calendario de ${esc(habit.name)}, ${monthLabel}">
         <div class="cal__weekdays" role="row">
           ${WEEKDAYS_SHORT.map((d) => `<span role="columnheader">${d}</span>`).join("")}
         </div>
-        <div class="cal__days">${cells}</div>
+        <div class="cal__days" role="row">${cells}</div>
       </div>`;
   }
 
@@ -720,11 +738,10 @@ export async function renderHabitsView(container, apiBase) {
     renderStats(statsRes);
     renderFilters();
     renderManage();
-    renderCalendarSelect();
     await renderCalendar();
   }
 
-  async function handleAction(action, id) {
+  async function handleAction(action, id, dataset = {}, element = null) {
     switch (action) {
       case "new":
         openForm(null);
@@ -742,6 +759,28 @@ export async function renderHabitsView(container, apiBase) {
         calendar.month += 1;
         if (calendar.month > 11) { calendar.month = 0; calendar.year += 1; }
         await renderCalendar();
+        return;
+      }
+      case "cal-edit": {
+        const habit = habitById(id);
+        const date = dataset.date;
+        if (!habit || !date) return;
+        const data = calCache.daysByHabit.get(id);
+        const day = data ? data.days.find((d) => d.date === date) : null;
+        if (!day) return;
+        openHabitEntryEditor({
+          apiBase,
+          habit,
+          date,
+          entry: day.entry_status
+            ? { status: day.entry_status, value: day.entry_value }
+            : null,
+          today: data.today,
+          // refresh() re-renderiza métricas, hoy y calendarios afectados.
+          onSaved: refresh,
+          getFallbackFocus: () => calendarGridEl,
+          returnFocusTo: element,
+        });
         return;
       }
       case "mark":
@@ -861,18 +900,13 @@ export async function renderHabitsView(container, apiBase) {
   view.addEventListener("click", (event) => {
     const target = event.target.closest("[data-action]");
     if (!target || !view.contains(target)) return;
-    handleAction(target.dataset.action, target.dataset.id);
+    handleAction(target.dataset.action, target.dataset.id, target.dataset, target);
   });
 
   formEl.addEventListener("submit", submitForm);
 
   freqEl.addEventListener("change", () => {
     daysFieldEl.hidden = freqEl.value !== "weekly_days";
-  });
-
-  calHabitEl.addEventListener("change", () => {
-    calendar.habitId = calHabitEl.value || null;
-    renderCalendar();
   });
 
   filterCategoryEl.addEventListener("change", renderManage);

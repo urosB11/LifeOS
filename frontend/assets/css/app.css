@@ -676,57 +676,41 @@ body.theme-dark .habit-row--done {
   align-items: center;
   justify-content: center;
   border-radius: calc(var(--radius) - 2px);
+  font-family: inherit;
   font-size: 0.6875rem;
   font-weight: 500;
+  color: inherit;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
   border: 1px solid transparent;
   transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Celdas editables (fechas programadas <= hoy) */
+button.cal-day {
+  cursor: pointer;
 }
 
 .cal-day--empty {
   visibility: hidden;
 }
 
-.cal-day--off {
-  background: var(--surface-hover);
-  color: var(--text-muted);
-}
-
-.cal-day--future {
-  background: var(--surface);
-  border-color: var(--border);
-  color: var(--text-secondary);
-}
-
-.cal-day--missed {
-  background: var(--danger-subtle);
-  color: var(--danger);
-}
-
-.cal-day--done {
-  background: var(--accent);
-  color: #FFFFFF;
-}
-
-.cal-day--partial {
-  background: var(--warning-subtle);
-  color: var(--warning);
-}
-
-.cal-day--skipped {
-  background: var(--surface-hover);
-  color: var(--text-secondary);
-}
-
 .cal-day--today {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   font-weight: 700;
-  background: var(--accent-subtle);
 }
 
-.cal-day:hover:not(.cal-day--empty):not(.cal-day--done) {
-  background: var(--surface-hover);
-  border-color: var(--border);
+button.cal-day:hover {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button.cal-day:focus-visible,
+button.wk-cell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .cal-legend {
@@ -754,91 +738,201 @@ body.theme-dark .habit-row--done {
   border: 1px solid var(--border);
 }
 
-.cal-swatch.cal-day--done { background: var(--accent); border-color: var(--accent); }
-.cal-swatch.cal-day--partial { background: var(--warning-subtle); }
-.cal-swatch.cal-day--skipped { background: var(--surface-hover); }
-.cal-swatch.cal-day--missed { background: var(--danger-subtle); }
-.cal-swatch.cal-day--off { background: var(--surface-hover); }
+/* Swatches de leyenda: mismos estados que las celdas (las clases .hstate--*
+ * se aplican después de las bases .cal-swatch/.wk-swatch más abajo) */
+
+/* Calendarios por hábito (HAB-002 §2): grilla responsive, sin carrusel */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--spacing);
+}
+
+/* La tarjeta de calendarios nunca excede el ancho de la ventana: evita que la
+   grilla multi-hábito sea la causa del overflow horizontal de página mientras
+   .main conserve su ancho intrínseco (defecto preexistente, tarea aparte). */
+.habits-calendar {
+  max-width: calc(100vw - 2 * var(--spacing));
+}
+
+.cal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  min-width: 0;
+}
+
+.cal-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.cal-card__name {
+  font-weight: 600;
+  font-size: 0.9375rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-card .cal {
+  max-width: 100%;
+}
 
 /* Filas de gestión (tabla ya estilada globalmente) */
 .habits-manage .habit-dot {
   margin-right: 8px;
 }
 
-/* Widget "Semana de hábitos" (home) */
-.wk-table {
+/* Widget "Semana de hábitos" (home) — matriz responsive sin scroll
+ * horizontal (HAB-002 §1): nombre + 7 columnas alineadas por fecha. */
+.wk-matrix {
+  --wk-cell-size: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   width: 100%;
-  border-collapse: collapse;
-  font-size: 0.8125rem;
+  min-width: 0;
 }
 
-.wk-th {
-  padding: 4px 3px;
-  text-align: center;
-  color: var(--text-secondary);
-  font-weight: 600;
-  white-space: nowrap;
+.wk-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(7, var(--wk-cell-size));
+  gap: 4px;
+  align-items: center;
 }
 
 .wk-name {
-  text-align: left;
-  padding: 4px 8px 4px 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text);
-  white-space: nowrap;
 }
 
-.wk-td {
+.wk-name--head {
+  font-weight: 400;
+}
+
+.wk-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
   text-align: center;
-  padding: 2px;
+}
+
+.wk-head--today {
+  color: var(--accent);
 }
 
 .wk-cell {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 100%;
+  height: var(--wk-cell-size);
   border-radius: 6px;
-  font-size: 0.75rem;
   border: 1px solid transparent;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-.wk-cell--done {
+button.wk-cell {
+  cursor: pointer;
+}
+
+.wk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.wk-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wk-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* --- Estados de día de hábito (HAB-002: semántica compartida) ---------- *
+ * Home (matriz de semana) y Habit Tracker (calendarios) usan estas mismas
+ * clases; la leyenda de ambas vistas se genera desde habit-entry.js para
+ * que coincida exactamente con lo visible. Se derivan de programación,
+ * fecha local y registro: no hay estados persistidos nuevos. */
+.hstate--done {
   background: var(--accent);
   color: #FFFFFF;
 }
 
-.wk-cell--partial {
-  background: var(--warning-subtle);
+.hstate--partial {
+  background: var(--info-subtle);
+  color: var(--info);
+  border-color: var(--info);
+}
+
+.hstate--wait {
+  background: var(--surface);
   color: var(--warning);
+  border-style: dashed;
+  border-color: var(--warning);
 }
 
-.wk-cell--skip {
-  background: var(--surface-hover);
-  color: var(--text-secondary);
-}
-
-.wk-cell--missed {
+.hstate--missed {
   background: var(--danger-subtle);
   color: var(--danger);
+  border-color: var(--danger);
 }
 
-.wk-cell--future {
-  background: var(--surface);
+.hstate--skipped {
+  background: var(--warning-subtle);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.hstate--future {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
   border-color: var(--border);
 }
 
-.wk-cell--off {
-  background: var(--surface-hover);
-  color: var(--text-muted);
+/* No programado: sin casillero, borde, fondo, símbolo ni color */
+.hstate--off {
+  background: transparent;
+  border-color: transparent;
 }
 
-.wk-legend {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-top: 8px;
-  line-height: 1.6;
+/* Swatch vacío del ítem "No programado" en las leyendas */
+.lg-swatch--empty {
+  background: transparent;
+  border: 1px dashed var(--border);
 }
 
 /* --- Responsive --- */
@@ -931,6 +1025,15 @@ body.theme-dark .habit-row--done {
     height: 28px;
     aspect-ratio: 1;
     font-size: 0.625rem;
+  }
+
+  /* Matriz de semana: celdas más compactas, sin scroll horizontal */
+  .wk-matrix {
+    --wk-cell-size: 24px;
+  }
+
+  .wk-row {
+    gap: 3px;
   }
 
   .toast-container {

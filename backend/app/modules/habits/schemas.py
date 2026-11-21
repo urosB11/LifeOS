@@ -242,11 +242,16 @@ class HabitStats(BaseModel):
 # --- Vista semanal (widget habits_week) ----------------------------------
 
 class WeekDay(BaseModel):
-    """Un día de la semana actual con su programación y registro."""
+    """Un día de la semana actual con su programación y registro.
+
+    `entry_value` es aditivo (HAB-002): permite editar la cantidad desde
+    la UI sin una ruta nueva. No agrega estados persistidos.
+    """
 
     date: str
     scheduled: bool
     entry_status: str | None = None
+    entry_value: float | None = None
 
 
 class WeekItem(BaseModel):

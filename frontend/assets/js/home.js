@@ -5,6 +5,14 @@
 // en el backend.
 
 import { showToast } from "./app.js";
+import {
+  HABIT_DAY_SYMBOLS,
+  deriveHabitDayState,
+  formatLongDate,
+  habitLegendHtml,
+  habitStateLabel,
+  openHabitEntryEditor,
+} from "./habit-entry.js";
 
 export async function renderHomeView(container, apiBase) {
   container.innerHTML = `
@@ -32,6 +40,12 @@ export async function renderHomeView(container, apiBase) {
   const editBtn = container.querySelector("#widgets-edit-btn");
 
   let widgets = [];
+  // Últimos datos del resumen: permiten actualizar "Hábitos hoy" tras
+  // registrar un hábito sin recargar todo el dashboard (HAB-002).
+  let lastSummary = null;
+  let lastNotesCount = 0;
+  // Última semana cargada: alimenta el editor de celdas del widget.
+  let currentWeek = null;
 
   // --- Carga de datos -------------------------------------------------------
   async function load() {
@@ -44,6 +58,7 @@ export async function renderHomeView(container, apiBase) {
 
       if (!sumRes.ok) throw new Error(`HTTP ${sumRes.status}`);
       const summary = await sumRes.json();
+      lastSummary = summary;
 
       // Métricas adicionales desde endpoints existentes (sin duplicar módulos)
       let notesCount = 0;
@@ -68,6 +83,7 @@ export async function renderHomeView(container, apiBase) {
         // Métricas adicionales son best-effort
       }
 
+      lastNotesCount = notesCount;
       renderSummary(summary, notesCount, habitsToday);
 
       if (!wRes.ok) throw new Error(`HTTP ${wRes.status}`);
@@ -266,59 +282,93 @@ export async function renderHomeView(container, apiBase) {
     return `<div class="widget-list">${rows}${more}</div>${link}`;
   }
 
-  function weekCell(day, today) {
-    if (!day.scheduled) {
-      return `<span class="wk-cell wk-cell--off" title="No programado" aria-hidden="true">&middot;</span>`;
+  function weekCell(habit, day, today) {
+    const state = deriveHabitDayState(day, today);
+    const label = `${habit.name}, ${formatLongDate(day.date)}: ${habitStateLabel(state)}`;
+    const symbol = HABIT_DAY_SYMBOLS[state];
+    const editable = state !== "off" && state !== "future";
+    if (editable) {
+      // Días programados <= hoy: editables desde Home (HAB-002 §1).
+      return `<button type="button" class="wk-cell hstate--${state}" role="gridcell"
+              data-action="wk-edit" data-id="${habit.id}" data-date="${day.date}"
+              aria-label="${escapeHtml(label)}. Editar registro">${symbol}</button>`;
     }
-    if (day.entry_status === "completed") {
-      return `<span class="wk-cell wk-cell--done" title="Cumplido">&#10003;</span>`;
-    }
-    if (day.entry_status === "skipped") {
-      return `<span class="wk-cell wk-cell--skip" title="Omitido">&ndash;</span>`;
-    }
-    if (day.entry_status === "pending") {
-      return `<span class="wk-cell wk-cell--partial" title="Registrado sin completar">&bull;</span>`;
-    }
-    if (day.date > today) {
-      return `<span class="wk-cell wk-cell--future" title="Programado, a&uacute;n sin registrar"></span>`;
-    }
-    return `<span class="wk-cell wk-cell--missed" title="Pendiente de registrar">&#9675;</span>`;
+    // No programado: espacio de alineación sin casillero, borde, fondo,
+    // símbolo ni color. Futuro: celda gris sin interacción.
+    return `<span class="wk-cell hstate--${state}" role="gridcell"
+            aria-label="${escapeHtml(label)}">${symbol}</span>`;
   }
 
   function renderHabitsWeek(week) {
+    currentWeek = week;
     const link = `<p style="margin-top:10px;"><a href="#/habits">Abrir h&aacute;bitos &rarr;</a></p>`;
     if (!week.items.length) {
       return `<p class="empty-state">No hay h&aacute;bitos activos.</p>${link}`;
     }
+    const names = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
     const head = week.items[0].days
       .map((d) => {
-        const n = d.date.slice(8, 10);
-        const names = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
         const weekday = new Date(`${d.date}T00:00:00`).getDay();
-        return `<th class="wk-th" scope="col" title="${d.date}">${names[weekday]} ${n}</th>`;
+        const isToday = d.date === week.today;
+        return `<span class="wk-head${isToday ? " wk-head--today" : ""}" role="columnheader">
+            <span aria-hidden="true">${names[weekday]}</span>
+            <span aria-hidden="true">${d.date.slice(8, 10)}</span>
+            <span class="sr-only">${escapeHtml(formatLongDate(d.date))}${isToday ? " (hoy)" : ""}</span>
+          </span>`;
       })
       .join("");
     const rows = week.items
       .map(
         (item) => `
-      <tr>
-        <th class="wk-name" scope="row">${escapeHtml(item.habit.name)}</th>
-        ${item.days.map((d) => `<td class="wk-td">${weekCell(d, week.today)}</td>`).join("")}
-      </tr>
+      <div class="wk-row" role="row">
+        <span class="wk-name" role="rowheader"
+              title="${escapeHtml(item.habit.name)}">${escapeHtml(item.habit.name)}</span>
+        ${item.days
+          .map((d) => weekCell(item.habit, d, week.today))
+          .join("")}
+      </div>
     `
       )
       .join("");
     return `
-      <div class="table-wrap">
-        <table class="wk-table">
-          <thead><tr><th class="wk-name" scope="col"><span class="sr-only">H&aacute;bito</span></th>${head}</tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div class="wk-matrix" role="grid"
+           aria-label="Semana de h&aacute;bitos: ${week.week_start} al ${week.week_end}">
+        <div class="wk-row wk-row--head" role="row">
+          <span class="wk-name wk-name--head" role="columnheader">
+            <span class="sr-only">H&aacute;bito</span>
+          </span>
+          ${head}
+        </div>
+        ${rows}
       </div>
-      <p class="wk-legend">&#10003; cumplido &middot; &bull; registrado sin completar &middot;
-        &ndash; omitido &middot; &#9675; pendiente &middot; celda vac&iacute;a: programado a&uacute;n
-        futuro &middot; gris: no programado</p>
+      <ul class="wk-legend">${habitLegendHtml("wk")}</ul>
       ${link}`;
+  }
+
+  // Refresca semana, widget de hoy y el resumen afectado tras editar un
+  // registro, sin recargar toda la aplicación (HAB-002 §1).
+  async function refreshHabitsViews() {
+    const [weekRes, todayRes] = await Promise.all([
+      fetch(`${apiBase}/habits/week`),
+      fetch(`${apiBase}/habits/today`),
+    ]);
+    if (!weekRes.ok || !todayRes.ok) {
+      throw new Error("No se pudo actualizar la vista de hábitos");
+    }
+    const week = await weekRes.json();
+    const items = await todayRes.json();
+    const weekEl = container.querySelector("#widget-content-habits_week");
+    if (weekEl) weekEl.innerHTML = renderHabitsWeek(week);
+    const todayEl = container.querySelector("#widget-content-habits_today");
+    if (todayEl) todayEl.innerHTML = renderHabitsToday(items);
+    if (lastSummary) {
+      renderSummary(lastSummary, lastNotesCount, {
+        total: items.length,
+        completed: items.filter(
+          (i) => i.entry && i.entry.status === "completed"
+        ).length,
+      });
+    }
   }
 
   // --- Quick add handlers ---------------------------------------------------
@@ -488,11 +538,36 @@ export async function renderHomeView(container, apiBase) {
 
   editBtn.addEventListener("click", openConfig);
 
+  // Edición de celdas de la semana (delegación: el contenido se re-renderiza).
+  gridEl.addEventListener("click", (event) => {
+    const cell = event.target.closest('[data-action="wk-edit"]');
+    if (!cell || !gridEl.contains(cell)) return;
+    if (!currentWeek) return;
+    const item = currentWeek.items.find((i) => i.habit.id === cell.dataset.id);
+    if (!item) return;
+    const day = item.days.find((d) => d.date === cell.dataset.date);
+    if (!day) return;
+    openHabitEntryEditor({
+      apiBase,
+      habit: item.habit,
+      date: day.date,
+      entry: day.entry_status
+        ? { status: day.entry_status, value: day.entry_value }
+        : null,
+      today: currentWeek.today,
+      onSaved: refreshHabitsViews,
+      getFallbackFocus: () => container.querySelector("#widget-habits_week"),
+      returnFocusTo: cell,
+    });
+  });
+
   await load();
 }
 
 function escapeHtml(text) {
   const div = document.createElement("div");
   div.textContent = text;
-  return div.innerHTML;
+  // Escapa también comillas: los valores usados en atributos (aria-label,
+  // title) deben seguir siendo seguros con nombres de usuario.
+  return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }

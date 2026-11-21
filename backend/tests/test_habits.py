@@ -755,6 +755,92 @@ def test_habits_week_view(client, db):
     assert client.get(f"/api/v1/habits/{daily['id']}").status_code == 200
 
 
+def test_week_and_calendar_expose_entry_value(client, db):
+    """HAB-002: semana/calendario exponen entry_value (aditivo, sin ruta nueva).
+
+    Cubre registro histórico por debajo/sobre la meta, corrección con PATCH,
+    borrado con DELETE y hábito binario (value None). Sin estados nuevos.
+    """
+    from datetime import timedelta
+
+    today = _today(db)
+    past = (today - timedelta(days=2)).isoformat()
+    quant = _create_habit(
+        client, name="Agua", start_date=_days_ago(db, 10),
+        target_value=8.0, target_unit="vasos",
+    ).json()
+
+    # Registro histórico por debajo de la meta → pending con valor
+    r = client.post(
+        f"/api/v1/habits/{quant['id']}/entries",
+        json={"entry_date": past, "value": 5.0},
+    )
+    assert r.status_code == 201, r.text
+
+    # Calendario del mes del registro histórico: estado y valor
+    cal = client.get(
+        f"/api/v1/habits/{quant['id']}/calendar?month={past[:7]}"
+    ).json()
+    cal_day = next(d for d in cal["days"] if d["date"] == past)
+    assert cal_day["scheduled"] is True
+    assert cal_day["entry_status"] == "pending"
+    assert cal_day["entry_value"] == 5.0
+
+    # Registro de hoy: la semana expone estado y valor
+    r = client.post(
+        f"/api/v1/habits/{quant['id']}/entries",
+        json={"value": 6.0},
+    )
+    assert r.status_code == 201, r.text
+    week = client.get("/api/v1/habits/week").json()
+    item = next(i for i in week["items"] if i["habit"]["id"] == quant["id"])
+    by_date = {d["date"]: d for d in item["days"]}
+    assert by_date[today.isoformat()]["entry_status"] == "pending"
+    assert by_date[today.isoformat()]["entry_value"] == 6.0
+
+    # Corrección histórica con PATCH: supera la meta → completed en calendario
+    r = client.patch(
+        f"/api/v1/habits/{quant['id']}/entries/{past}",
+        json={"value": 9.0},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "completed"
+    cal = client.get(
+        f"/api/v1/habits/{quant['id']}/calendar?month={past[:7]}"
+    ).json()
+    cal_day = next(d for d in cal["days"] if d["date"] == past)
+    assert cal_day["entry_status"] == "completed"
+    assert cal_day["entry_value"] == 9.0
+
+    # DELETE: la semana vuelve a no registrado (ambos campos en None)
+    r = client.delete(f"/api/v1/habits/{quant['id']}/entries/{today.isoformat()}")
+    assert r.status_code == 204
+    week = client.get("/api/v1/habits/week").json()
+    item = next(i for i in week["items"] if i["habit"]["id"] == quant["id"])
+    day = {d["date"]: d for d in item["days"]}[today.isoformat()]
+    assert day["entry_status"] is None
+    assert day["entry_value"] is None
+
+    # Hábito binario: registra cumplimiento sin valor → entry_value None
+    binary = _create_habit(
+        client, name="Binario", start_date=_days_ago(db, 10)
+    ).json()
+    client.post(
+        f"/api/v1/habits/{binary['id']}/entries",
+        json={"entry_date": past},
+    )
+    cal = client.get(
+        f"/api/v1/habits/{binary['id']}/calendar?month={past[:7]}"
+    ).json()
+    cal_day = next(d for d in cal["days"] if d["date"] == past)
+    assert cal_day["entry_status"] == "completed"
+    assert cal_day["entry_value"] is None
+
+    # Sin estados persistidos nuevos: los status siguen siendo los conocidos
+    entries = client.get(f"/api/v1/habits/{quant['id']}/entries").json()
+    assert {e["status"] for e in entries} <= {"pending", "completed", "skipped"}
+
+
 def test_stats_metadata_and_formula_sources(client, db):
     """Transparencia: período, denominadores y fuentes visibles en la respuesta."""
     habit_id = _create_habit(

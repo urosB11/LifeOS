@@ -20,7 +20,7 @@ Prioridad P0 · Reviewer Mimo · Spec STAB-001/SPEC.md · Solo revisión, no có
 Prioridad P0 · Developer Nemo · Spec BUG-001/SPEC.md · Reproducir antes de corregir.
 
 ### HAB-002 — Semana interactiva y calendarios por hábito
-Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo · Depende de STAB-001 para liberar a Mimo de la revisión independiente · Spec HAB-002/SPEC.md.
+Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo · Depende de STAB-001 para liberar a Mimo de la revisión independiente · Spec HAB-002/SPEC.md. **Estado: REVIEW** (Mimo, 2026-11-21) — implementación completa y QA propia ejecutada (140/140 pytest, ruff y node --check OK, QA visual en 3 viewports sin hallazgos ALTA); pendiente revisión independiente de Nemo. Handoff: `docs/factory/work/HAB-002/HANDOFF.md`.
 
 ### PRJ-UI-001 — Mantener las tareas visibles al abrir el formulario
 Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo · Después de BUG-001 para evitar solapamiento en projects.js · Spec PRJ-UI-001/SPEC.md.

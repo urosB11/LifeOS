@@ -339,18 +339,21 @@ class HabitService:
         entries = self.entry_repo.list_for_habit(
             habit_id, from_date=first.isoformat(), to_date=last.isoformat()
         )
-        entry_map = {e.entry_date: e.status for e in entries}
+        entry_map = {e.entry_date: e for e in entries}
         today = local_today(self.db)
 
         days: list[dict] = []
         current = first
         while current <= last:
             iso = current.isoformat()
+            entry = entry_map.get(iso)
             days.append(
                 {
                     "date": iso,
                     "scheduled": scheduling.is_scheduled(habit, current),
-                    "entry_status": entry_map.get(iso),
+                    "entry_status": entry.status if entry else None,
+                    # Aditivo (HAB-002): valor para editar sin ruta nueva.
+                    "entry_value": entry.value if entry else None,
                 }
             )
             current = date.fromordinal(current.toordinal() + 1)
@@ -403,16 +406,18 @@ class HabitService:
                 to_date=week_end.isoformat(),
                 limit=7,
             )
-            entry_map = {e.entry_date: e.status for e in entries}
+            entry_map = {e.entry_date: e for e in entries}
             days = []
             for offset in range(7):
                 day = week_start + timedelta(days=offset)
                 iso = day.isoformat()
+                entry = entry_map.get(iso)
                 days.append(
                     WeekDay(
                         date=iso,
                         scheduled=scheduling.is_scheduled(habit, day),
-                        entry_status=entry_map.get(iso),
+                        entry_status=entry.status if entry else None,
+                        entry_value=entry.value if entry else None,
                     )
                 )
             items.append(WeekItem(habit=HabitOut.model_validate(habit), days=days))
