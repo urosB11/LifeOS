@@ -17,13 +17,13 @@ READY = especificada y autorizada; PLANNING = solo diseño; IN_PROGRESS = ejecuc
 Prioridad P0 · Reviewer Mimo · Spec STAB-001/SPEC.md · Solo revisión, no código. **Estado: REVIEW — veredicto de Mimo: REJECT** (2026-11-21). QA de Nemo verificado independientemente (139/139 pytest, ruff OK, node --check OK) + revisión visual Edge headless/CDP en 1440×900, 768×1024, 390×844. Hallazgos: ALTA overflow horizontal móvil en 5 pantallas (causa: `.main{margin:0 auto}` en flex column de `.app-content` — **no contemplado en la cola, requiere tarea nueva**); ALTA confirmada BUG-001 (campos perdidos tras error); MEDIA confirmada PRJ-UI-001 (tareas fuera del DOM con formulario abierto); MEDIA foco no restaurado al cerrar modal con ESC; BAJA favicon 404. Detalle en STAB-001/HANDOFF.md. Pendiente: aceptación del PO.
 
 ### BUG-001 — Conservar formulario ante error
-Prioridad P0 · Developer Nemo · Spec BUG-001/SPEC.md · Reproducir antes de corregir.
+Prioridad P0 · Developer Nemo (ejecución reasignada por el PO a Mimo) · Spec BUG-001/SPEC.md · **Estado: REVIEW** (2026-11-21) — reproducción confirmada y corregida en `projects.js`: borrador persistente del formulario, error junto al formulario (`role="alert"`), foco en el campo inválido o en el mensaje, sin doble envío. QA propia: 140/140 pytest, ruff y node --check OK, QA interactiva CDP sin hallazgos ALTA. Handoff: `docs/factory/work/BUG-001/HANDOFF.md`.
 
 ### HAB-002 — Semana interactiva y calendarios por hábito
 Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo · Depende de STAB-001 para liberar a Mimo de la revisión independiente · Spec HAB-002/SPEC.md. **Estado: REVIEW** (Mimo, 2026-11-21) — implementación completa y QA propia ejecutada (140/140 pytest, ruff y node --check OK, QA visual en 3 viewports sin hallazgos ALTA); pendiente revisión independiente de Nemo. Handoff: `docs/factory/work/HAB-002/HANDOFF.md`.
 
 ### PRJ-UI-001 — Mantener las tareas visibles al abrir el formulario
-Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo · Después de BUG-001 para evitar solapamiento en projects.js · Spec PRJ-UI-001/SPEC.md.
+Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo · Después de BUG-001 para evitar solapamiento en projects.js · Spec PRJ-UI-001/SPEC.md. **Estado: REVIEW** (2026-11-21) — la lista de tareas permanece en el DOM con el formulario abierto (formulario antes de la lista, contador/resumen visibles, vacío debajo del formulario); entregado en el mismo commit que BUG-001. Handoff: `docs/factory/work/PRJ-UI-001/HANDOFF.md`.
 
 ### HOME-001 — Home como centro de operaciones
 Prioridad P0 · Developer Nemo · Depende de STAB-001/BUG-001 y de HAB-002 por solapamiento en home.js · Spec HOME-001/SPEC.md.

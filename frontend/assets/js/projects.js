@@ -15,6 +15,25 @@ function escapeHtml(text) {
     .replace(/'/g, "&#39;");
 }
 
+// BUG-001: el borrador del formulario de tarea vive en estado para que un
+// re-render (por error HTTP, error de red o recarga) no destruya lo escrito.
+function emptyTaskDraft() {
+  return { title: "", desc: "", priority: "", due: "" };
+}
+
+// Normaliza el detalle de error de la API (string, objeto o lista de 422).
+function formatApiDetail(detail, fallback) {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => (item && item.msg ? item.msg : null))
+      .filter(Boolean);
+    if (messages.length) return messages.join(" · ");
+  }
+  return fallback;
+}
+
 function statusBadgeClass(status) {
   if (status === "active") return "status";
   if (status === "completed") return "success";
@@ -314,6 +333,33 @@ export async function renderProjectDetailView(container, apiBase, projectId) {
   let taskFormOpen = false;
   let creatingTask = false;
   let taskError = "";
+  // Campo al que debe ir el foco tras un error ("title" o "" = mensaje).
+  let taskErrorField = "";
+  // BUG-001: borrador persistente del formulario de tarea.
+  let taskDraft = emptyTaskDraft();
+
+  // Lee el formulario vivo antes de cualquier re-render para no perder lo escrito.
+  function captureTaskDraft() {
+    const titleEl = container.querySelector("#task-title");
+    const descEl = container.querySelector("#task-desc");
+    const priorityEl = container.querySelector("#task-priority");
+    const dueEl = container.querySelector("#task-due");
+    if (titleEl) taskDraft.title = titleEl.value;
+    if (descEl) taskDraft.desc = descEl.value;
+    if (priorityEl) taskDraft.priority = priorityEl.value;
+    if (dueEl) taskDraft.due = dueEl.value;
+  }
+
+  // Tras un error: foco en el primer campo inválido o en el mensaje.
+  function focusTaskError() {
+    const target =
+      taskErrorField === "title"
+        ? container.querySelector("#task-title")
+        : container.querySelector("#task-error");
+    if (!target) return;
+    if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+    target.focus();
+  }
 
   async function load() {
     try {
@@ -366,6 +412,8 @@ export async function renderProjectDetailView(container, apiBase, projectId) {
   }
 
   function renderDetail() {
+    // Conserva lo escrito en el formulario antes de reconstruir el DOM.
+    captureTaskDraft();
     const pct = progressPercent(project.completed_count, project.task_count);
     const hasTasks = project.task_count > 0;
     const pendingTasks = tasks.filter(t => t.status === "pending");
@@ -447,50 +495,55 @@ export async function renderProjectDetailView(container, apiBase, projectId) {
           <span class="text-secondary" style="font-size:0.875rem;">
             ${completedTasks.length} completadas &middot; ${pendingTasks.length} pendientes${overdueTasks.length > 0 ? ` &middot; <span class="text-danger">${overdueTasks.length} vencidas</span>` : ""}
           </span>
-          <button class="btn btn--primary btn--sm" onclick="appProjectsDetail.toggleTaskForm()" id="task-new-btn">+ Nueva tarea</button>
+          <button class="btn btn--primary btn--sm" onclick="appProjectsDetail.toggleTaskForm()" id="task-new-btn"
+                  aria-expanded="${taskFormOpen ? "true" : "false"}" aria-controls="task-form">
+            ${taskFormOpen ? "Cerrar formulario" : "+ Nueva tarea"}
+          </button>
         </div>
 
         ${taskFormOpen ? `
-          <form id="task-form" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;" novalidate>
+          <form id="task-form" style="margin-top:12px; display:flex; flex-direction:column; gap:10px;" novalidate
+                aria-label="Nueva tarea en ${escapeHtml(project.name)}">
             <div class="form-row" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
               <div class="form-group" style="flex:2; min-width:240px;">
                 <label for="task-title">T&iacute;tulo <span class="text-secondary" style="font-weight:normal;">(obligatorio)</span></label>
-                <input type="text" id="task-title" placeholder="T&iacute;tulo de la tarea" required maxlength="200">
+                <input type="text" id="task-title" value="${escapeHtml(taskDraft.title)}" placeholder="T&iacute;tulo de la tarea" required maxlength="200"
+                       ${taskErrorField === "title" ? 'aria-invalid="true" aria-describedby="task-error"' : ""}>
               </div>
               <div class="form-group" style="flex:1; min-width:180px;">
                 <label for="task-desc">Descripci&oacute;n (opcional)</label>
-                <input type="text" id="task-desc" placeholder="Descripci&oacute;n" maxlength="2000">
+                <input type="text" id="task-desc" value="${escapeHtml(taskDraft.desc)}" placeholder="Descripci&oacute;n" maxlength="2000">
               </div>
               <div class="form-group" style="flex:0; min-width:140px;">
                 <label for="task-priority">Prioridad</label>
                 <select id="task-priority">
-                  <option value="">Sin prioridad</option>
-                  <option value="high">Alta</option>
-                  <option value="normal">Normal</option>
-                  <option value="low">Baja</option>
+                  <option value="" ${taskDraft.priority === "" ? "selected" : ""}>Sin prioridad</option>
+                  <option value="high" ${taskDraft.priority === "high" ? "selected" : ""}>Alta</option>
+                  <option value="normal" ${taskDraft.priority === "normal" ? "selected" : ""}>Normal</option>
+                  <option value="low" ${taskDraft.priority === "low" ? "selected" : ""}>Baja</option>
                 </select>
               </div>
               <div class="form-group" style="flex:1; min-width:160px;">
                 <label for="task-due">Vencimiento (opcional)</label>
-                <input type="date" id="task-due">
+                <input type="date" id="task-due" value="${escapeHtml(taskDraft.due)}">
               </div>
             </div>
             <div class="btn-group" style="margin-top:4px;">
-              <button type="button" class="btn btn--primary" id="task-save-btn" ${creatingTask ? "disabled" : ""}>Crear tarea</button>
+              <button type="submit" class="btn btn--primary" id="task-save-btn" ${creatingTask ? "disabled" : ""}>${creatingTask ? "Guardando&hellip;" : "Crear tarea"}</button>
               <button type="button" class="btn btn--secondary" onclick="appProjectsDetail.cancelTaskForm()">Cancelar</button>
-              <span id="task-error" style="color:var(--danger); font-size:0.875rem; margin-left:8px;" role="alert">${taskError || ""}</span>
+              <span id="task-error" role="alert" tabindex="-1" style="color:var(--danger); font-size:0.875rem; margin-left:8px;">${taskError ? escapeHtml(taskError) : ""}</span>
             </div>
           </form>
         ` : ""}
 
-        ${!taskFormOpen && tasks.length === 0 ? `
+        ${tasks.length === 0 ? `
           <div class="empty-state" style="padding:20px;">
             <div class="empty-state__icon" aria-hidden="true">&#10003;</div>
             <p class="empty-state__title">Sin tareas</p>
-            <p class="empty-state__text">Este proyecto no tiene tareas asociadas.</p>
-            <button class="btn btn--primary btn--sm" onclick="appProjectsDetail.toggleTaskForm()" style="margin-top:12px;">Crear primera tarea</button>
+            <p class="empty-state__text">${taskFormOpen ? "Este proyecto todav&iacute;a no tiene tareas. Complet&aacute; el formulario de arriba para crear la primera." : "Este proyecto no tiene tareas asociadas."}</p>
+            ${taskFormOpen ? "" : `<button class="btn btn--primary btn--sm" onclick="appProjectsDetail.toggleTaskForm()" style="margin-top:12px;">Crear primera tarea</button>`}
           </div>
-        ` : !taskFormOpen ? `
+        ` : `
           <div class="table-wrap">
           <table class="table">
             <thead>
@@ -513,7 +566,7 @@ export async function renderProjectDetailView(container, apiBase, projectId) {
             </tbody>
           </table>
           </div>
-        ` : ""}
+        `}
       </div>
 
       <div class="card" style="margin-top:24px; border-color:var(--danger);">
@@ -558,12 +611,8 @@ export async function renderProjectDetailView(container, apiBase, projectId) {
       }
     });
 
-    const taskSaveBtn = container.querySelector("#task-save-btn");
-    if (taskSaveBtn) {
-      taskSaveBtn.addEventListener("click", async () => {
-        await appProjectsDetail.createTask();
-      });
-    }
+    // El botón es type="submit": clic y Enter disparan el mismo flujo y la
+    // bandera `creatingTask` evita el doble envío.
     const taskForm = container.querySelector("#task-form");
     if (taskForm) {
       taskForm.addEventListener("submit", (e) => {
@@ -629,29 +678,47 @@ export async function renderProjectDetailView(container, apiBase, projectId) {
     },
 
     toggleTaskForm() {
-      taskFormOpen = !taskFormOpen;
+      const willOpen = !taskFormOpen;
+      taskFormOpen = willOpen;
       taskError = "";
+      taskErrorField = "";
+      if (!willOpen) taskDraft = emptyTaskDraft();
       renderDetail();
+      if (willOpen) {
+        const titleEl = container.querySelector("#task-title");
+        if (titleEl) titleEl.focus();
+      } else {
+        const btn = container.querySelector("#task-new-btn");
+        if (btn) btn.focus();
+      }
     },
 
+    // Cancelar quita solo el formulario: la lista de tareas permanece visible
+    // en el mismo contexto (PRJ-UI-001).
     cancelTaskForm() {
       taskFormOpen = false;
       taskError = "";
+      taskErrorField = "";
+      taskDraft = emptyTaskDraft();
       renderDetail();
+      const btn = container.querySelector("#task-new-btn");
+      if (btn) btn.focus();
     },
 
     async createTask() {
       if (creatingTask) return;
-      const title = container.querySelector("#task-title").value.trim();
-      const desc = container.querySelector("#task-desc").value.trim();
-      const priority = container.querySelector("#task-priority").value;
-      const due = container.querySelector("#task-due").value;
+      // Lee el formulario vivo: el borrador sobrevive a cualquier re-render.
+      captureTaskDraft();
+      const title = taskDraft.title.trim();
+      const desc = taskDraft.desc.trim();
+      const priority = taskDraft.priority;
+      const due = taskDraft.due;
 
       if (!title) {
-        taskError = "El t&iacute;tulo de la tarea no puede estar vac&iacute;o.";
+        taskError = "El título de la tarea no puede estar vacío.";
+        taskErrorField = "title";
         renderDetail();
-        const el = container.querySelector("#task-title");
-        if (el) el.focus();
+        focusTaskError();
         return;
       }
 
@@ -662,6 +729,7 @@ export async function renderProjectDetailView(container, apiBase, projectId) {
 
       creatingTask = true;
       taskError = "";
+      taskErrorField = "";
       renderDetail();
 
       try {
@@ -672,23 +740,28 @@ export async function renderProjectDetailView(container, apiBase, projectId) {
         });
 
         if (res.ok) {
-          taskFormOpen = false;
           creatingTask = false;
+          taskFormOpen = false;
           taskError = "";
+          taskErrorField = "";
+          taskDraft = emptyTaskDraft();
           showToast("Tarea creada", "success");
           await load();
         } else {
           creatingTask = false;
-          const err = await res.json();
-          taskError = err.detail || "Error al crear tarea";
+          const err = await res.json().catch(() => ({}));
+          taskError = formatApiDetail(err.detail, `Error al crear tarea (HTTP ${res.status})`);
+          // 400/422: el foco va al primer campo inválido; el resto, al mensaje.
+          taskErrorField = res.status === 400 || res.status === 422 ? "title" : "";
           renderDetail();
-          const el = container.querySelector("#task-title");
-          if (el) el.focus();
+          focusTaskError();
         }
       } catch (error) {
         creatingTask = false;
-        taskError = "Error de conexi&oacute;n";
+        taskError = "Error de conexión. Verifica que el servicio esté activo e inténtalo de nuevo.";
+        taskErrorField = "";
         renderDetail();
+        focusTaskError();
       }
     },
   };
