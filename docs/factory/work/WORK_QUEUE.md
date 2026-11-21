@@ -26,10 +26,10 @@ Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo 
 Prioridad P1 · Developer Mimo (asignación explícita del PO) · Reviewer Nemo · Después de BUG-001 para evitar solapamiento en projects.js · Spec PRJ-UI-001/SPEC.md. **Estado: REVIEW** (2026-11-21) — la lista de tareas permanece en el DOM con el formulario abierto (formulario antes de la lista, contador/resumen visibles, vacío debajo del formulario); entregado en el mismo commit que BUG-001. Handoff: `docs/factory/work/PRJ-UI-001/HANDOFF.md`.
 
 ### HOME-001 — Home como centro de operaciones
-Prioridad P0 · Developer Nemo · Depende de STAB-001/BUG-001 y de HAB-002 por solapamiento en home.js · Spec HOME-001/SPEC.md.
+Prioridad P0 · Developer Nemo (ejecución reasignada por el PO a Mimo) · Depende de STAB-001/BUG-001 y de HAB-002 por solapamiento en home.js · Spec HOME-001/SPEC.md. **Estado: REVIEW** (2026-11-21) — Home reescrito como centro de operaciones (Atención, Hoy, Proyectos en marcha, Hábitos de hoy, Captura rápida, Semana de hábitos); se eliminaron las seis tarjetas métricas iguales; catálogo de widgets conservado (ids, visibilidad y orden functioning, verificado). Incluye corrección aislada del tema claro, que nunca se aplicaba. QA propia: 140/140 pytest, ruff y node --check OK, QA interactiva/visual CDP en 3 viewports y 2 temas con 0 hallazgos. Handoff: `docs/factory/work/HOME-001/HANDOFF.md`.
 
 ### TASK-001 — Espacio de trabajo de Tareas
-Prioridad P1 · Developer Nemo · Secuencial después de HOME-001 · Spec TASK-001/SPEC.md.
+Prioridad P1 · Developer Nemo (ejecución reasignada por el PO a Mimo) · Secuencial después de HOME-001 · Spec TASK-001/SPEC.md. **Estado: READY** (2026-11-21) — HOME-001 está en REVIEW, se puede iniciar.
 
 ## Revisión
 ### UX-REVIEW-001

@@ -1,8 +1,13 @@
-// Life OS — vista Home (dashboard configurable) — Fase 8B
+// Life OS — vista Home (dashboard configurable) — Fase 8B + HOME-001
 //
-// Centro de control adaptativo: resumen con métricas, grilla responsive de
-// widgets y configuración en modal. Persistencia de preferencias sin cambios
-// en el backend.
+// Centro de operaciones diario: qué requiere atención, qué conviene hacer
+// hoy, qué proyectos están en marcha, cómo vienen los hábitos y cómo
+// capturar una tarea o una nota.
+//
+// El catálogo de widgets se conserva intacto (ids, orden, visibilidad y
+// preferencias): cada widget del catálogo alimenta una sección de la nueva
+// estructura. La visibilidad oculta la sección; el orden define el orden
+// dentro de cada columna. No se agregan endpoints ni dependencias.
 
 import { showToast } from "./app.js";
 import {
@@ -10,16 +15,37 @@ import {
   deriveHabitDayState,
   formatLongDate,
   habitLegendHtml,
+  habitStateBadge,
   habitStateLabel,
   openHabitEntryEditor,
 } from "./habit-entry.js";
+
+// Rol de cada widget del catálogo dentro de la nueva estructura:
+// "main" = columna amplia · "side" = columna secundaria · "full" = ancho completo.
+const WIDGET_ROLES = {
+  upcoming_tasks: "main",
+  active_projects: "main",
+  habits_today: "side",
+  quick_add_task: "side",
+  quick_add_note: "side",
+  habits_week: "full",
+};
+
+const MAX_ATTENTION = 5;
+const MAX_TODAY = 8;
+const MAX_PROJECTS = 6;
+const MAX_HABITS = 6;
+// Una tarea cuenta como relevante para hoy si está vencida, vence hoy, vence
+// dentro de una semana, tiene prioridad alta o no tiene fecha.
+const RELEVANT_WINDOW_DAYS = 7;
 
 export async function renderHomeView(container, apiBase) {
   container.innerHTML = `
     <div class="section-header">
       <div>
         <h1>Home</h1>
-        <p class="subtitle">Resumen de tu día y accesos r&aacute;pidos</p>
+        <p class="subtitle" id="home-date">&nbsp;</p>
+        <p class="home-context" id="home-context"></p>
       </div>
       <button class="btn btn--secondary" id="widgets-edit-btn">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
@@ -30,256 +56,565 @@ export async function renderHomeView(container, apiBase) {
       </button>
     </div>
 
-    <div id="dashboard-summary" class="summary-cards" style="margin-bottom: 24px;"></div>
-
-    <div id="dashboard-grid" class="dashboard-grid"></div>
+    <div class="home-layout">
+      <div class="home-col home-col--main" id="home-main"></div>
+      <div class="home-col home-col--side" id="home-side"></div>
+      <div class="home-col home-col--full" id="home-full"></div>
+    </div>
   `;
 
-  const summaryEl = container.querySelector("#dashboard-summary");
-  const gridEl = container.querySelector("#dashboard-grid");
+  const dateEl = container.querySelector("#home-date");
+  const contextEl = container.querySelector("#home-context");
+  const mainEl = container.querySelector("#home-main");
+  const sideEl = container.querySelector("#home-side");
+  const fullEl = container.querySelector("#home-full");
   const editBtn = container.querySelector("#widgets-edit-btn");
 
   let widgets = [];
-  // Últimos datos del resumen: permiten actualizar "Hábitos hoy" tras
-  // registrar un hábito sin recargar todo el dashboard (HAB-002).
-  let lastSummary = null;
-  let lastNotesCount = 0;
+  // Datos de la vista. `null` en un bloque significa "no se pudo cargar"
+  // (se muestra el error del bloque); un array vacío significa "sin datos".
+  const data = { tasks: null, projects: null, habits: null, week: null };
   // Última semana cargada: alimenta el editor de celdas del widget.
   let currentWeek = null;
+  // Borradores de la captura rápida: sobreviven a los re-renders por error.
+  const drafts = {
+    task: { title: "", project_id: "" },
+    note: { title: "" },
+  };
+  const captureErrors = { task: "", note: "" };
+  const capturePending = { task: false, note: false };
+
+  // --- Utilidades -----------------------------------------------------------
+  function todayISO() {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  }
+
+  function addDays(iso, days) {
+    const d = new Date(`${iso}T00:00:00`);
+    d.setDate(d.getDate() + days);
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  }
+
+  // Orden explícito de "Hoy": vencidas, vencen hoy, prioridad alta, próxima
+  // fecha y, al final, las que no tienen fecha.
+  function todayRank(task, today) {
+    if (task.due_date && task.due_date < today) return 0;
+    if (task.due_date === today) return 1;
+    if (task.priority === "high") return 2;
+    if (task.due_date) return 3;
+    return 4;
+  }
+
+  function isRelevantToday(task, today) {
+    if (!task.due_date) return true;
+    if (task.due_date <= today) return true;
+    if (task.due_date <= addDays(today, RELEVANT_WINDOW_DAYS)) return true;
+    return task.priority === "high";
+  }
+
+  function priorityLabel(priority) {
+    if (priority === "high") return "Alta";
+    if (priority === "normal") return "Normal";
+    if (priority === "low") return "Baja";
+    return "";
+  }
+
+  function projectName(projectId) {
+    if (!projectId) return "";
+    const p = (data.projects || []).find((x) => x.id === projectId);
+    return p ? p.name : "";
+  }
+
+  function formatApiDetail(detail, fallback) {
+    if (!detail) return fallback;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      const messages = detail.map((item) => (item && item.msg ? item.msg : null)).filter(Boolean);
+      if (messages.length) return messages.join(" · ");
+    }
+    return fallback;
+  }
+
+  function projectProgress(project) {
+    if (!project.task_count) return 0;
+    return Math.round((project.completed_count / project.task_count) * 100);
+  }
 
   // --- Carga de datos -------------------------------------------------------
   async function load() {
+    mainEl.innerHTML = `<div class="widget-card"><p class="empty-state">Cargando&hellip;</p></div>`;
+    sideEl.innerHTML = "";
+    fullEl.innerHTML = "";
     try {
-      // Cargar resumen y widgets en paralelo
-      const [sumRes, wRes] = await Promise.all([
-        fetch(`${apiBase}/dashboard/summary`),
+      const [wRes, tasksRes, projectsRes, habitsRes, weekRes] = await Promise.all([
         fetch(`${apiBase}/dashboard/widgets`),
+        fetch(`${apiBase}/tasks?status=pending`),
+        fetch(`${apiBase}/projects?status=active`),
+        fetch(`${apiBase}/habits/today`),
+        fetch(`${apiBase}/habits/week`),
       ]);
-
-      if (!sumRes.ok) throw new Error(`HTTP ${sumRes.status}`);
-      const summary = await sumRes.json();
-      lastSummary = summary;
-
-      // Métricas adicionales desde endpoints existentes (sin duplicar módulos)
-      let notesCount = 0;
-      let habitsToday = { total: 0, completed: 0 };
-      try {
-        const [notesRes, habitsRes] = await Promise.all([
-          fetch(`${apiBase}/notes`),
-          fetch(`${apiBase}/habits/today`),
-        ]);
-        if (notesRes.ok) {
-          const notes = await notesRes.json();
-          notesCount = Array.isArray(notes) ? notes.length : 0;
-        }
-        if (habitsRes.ok) {
-          const items = await habitsRes.json();
-          habitsToday.total = items.length;
-          habitsToday.completed = items.filter(
-            (i) => i.entry && i.entry.status === "completed"
-          ).length;
-        }
-      } catch (_) {
-        // Métricas adicionales son best-effort
-      }
-
-      lastNotesCount = notesCount;
-      renderSummary(summary, notesCount, habitsToday);
 
       if (!wRes.ok) throw new Error(`HTTP ${wRes.status}`);
       widgets = await wRes.json();
-      renderWidgets();
+
+      // Cada bloque tolera su propio fallo: un error aislado no vacía Home.
+      data.tasks = tasksRes.ok ? await tasksRes.json() : null;
+      data.projects = projectsRes.ok ? await projectsRes.json() : null;
+      data.habits = habitsRes.ok ? await habitsRes.json() : null;
+      data.week = weekRes.ok ? await weekRes.json() : null;
+
+      renderAll();
     } catch (error) {
-      summaryEl.innerHTML = "";
-      gridEl.innerHTML = `
+      mainEl.innerHTML = `
         <div class="widget-card">
-          <p class="empty-state">No se pudo cargar el dashboard. Verifica que el servicio est&eacute; activo.</p>
+          <div class="empty-state">
+            <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
+            <p class="empty-state__title">No se pudo cargar Home</p>
+            <p class="empty-state__text">Verifica que el servicio est&eacute; activo e intent&aacute; de nuevo.</p>
+          </div>
         </div>
       `;
+      sideEl.innerHTML = "";
+      fullEl.innerHTML = "";
     }
   }
 
-  // --- Resumen --------------------------------------------------------------
-  function renderSummary(summary, notesCount, habitsToday) {
-    const overdueClass = summary.tasks.overdue > 0 ? "text-danger" : "";
-    summaryEl.innerHTML = `
-      <div class="summary-card">
-        <div class="summary-value">${summary.tasks.pending}</div>
-        <div class="summary-label">Tareas pendientes</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-value text-success">${summary.tasks.completed}</div>
-        <div class="summary-label">Tareas completadas</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-value ${overdueClass}">${summary.tasks.overdue}</div>
-        <div class="summary-label">Tareas vencidas</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-value">${summary.projects.active}</div>
-        <div class="summary-label">Proyectos activos</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-value">${notesCount}</div>
-        <div class="summary-label">Notas</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-value">${habitsToday.completed}/${habitsToday.total}</div>
-        <div class="summary-label">H&aacute;bitos hoy</div>
-      </div>
-    `;
+  // --- Estructura -----------------------------------------------------------
+  function visibleWidgets() {
+    return widgets.filter((w) => w.is_visible).sort((a, b) => a.position - b.position);
   }
 
-  // --- Widgets --------------------------------------------------------------
-  function renderWidgets() {
-    const visible = widgets.filter((w) => w.is_visible).sort((a, b) => a.position - b.position);
+  function renderAll() {
+    renderHeader();
 
+    const visible = visibleWidgets();
     if (visible.length === 0) {
-      gridEl.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state__icon" aria-hidden="true">&#9881;</div>
-          <p class="empty-state__title">No hay widgets visibles</p>
-          <p class="empty-state__text">Activa algunos en la configuraci&oacute;n.</p>
-          <button class="btn btn--primary" id="widgets-empty-config">Configurar widgets</button>
+      mainEl.innerHTML = `
+        <div class="widget-card">
+          <div class="empty-state">
+            <div class="empty-state__icon" aria-hidden="true">&#9881;</div>
+            <p class="empty-state__title">No hay secciones visibles</p>
+            <p class="empty-state__text">Activa alg&uacute;n widget en la configuraci&oacute;n para ver tu d&iacute;a.</p>
+            <button class="btn btn--primary" id="widgets-empty-config">Configurar widgets</button>
+          </div>
         </div>
       `;
-      const emptyBtn = gridEl.querySelector("#widgets-empty-config");
+      const emptyBtn = mainEl.querySelector("#widgets-empty-config");
       if (emptyBtn) emptyBtn.addEventListener("click", openConfig);
+      sideEl.innerHTML = "";
+      fullEl.innerHTML = "";
       return;
     }
 
-    gridEl.innerHTML = `
-      <div class="widgets-grid">
-        ${visible.map((w) => renderWidget(w)).join("")}
-      </div>
-    `;
+    const byRole = { main: [], side: [], full: [] };
+    visible.forEach((w) => {
+      const role = WIDGET_ROLES[w.widget_id] || "main";
+      byRole[role].push(w);
+    });
 
-    visible.forEach((w) => loadWidgetContent(w));
+    mainEl.innerHTML = byRole.main.map(renderMainWidget).join("");
+
+    // La captura rápida agrupa los dos widgets de acceso rápido en una
+    // sección; se renderiza una sola vez, en la posición del primero.
+    let captureRendered = false;
+    sideEl.innerHTML = byRole.side
+      .map((w) => {
+        if (w.widget_id === "quick_add_task" || w.widget_id === "quick_add_note") {
+          if (captureRendered) return "";
+          captureRendered = true;
+          return renderCaptureSection(byRole.side);
+        }
+        return renderSideWidget(w);
+      })
+      .join("");
+
+    fullEl.innerHTML = byRole.full.map(renderFullWidget).join("");
   }
 
-  function renderWidget(w) {
-    return `
-      <div class="widget-card" id="widget-${w.widget_id}">
-        <div class="widget-header">
-          <span class="widget-title">${w.label}</span>
-          <span class="widget-position">${w.position + 1}</span>
-        </div>
-        <div class="widget-content" id="widget-content-${w.widget_id}">
-          Cargando&hellip;
-        </div>
-      </div>
-    `;
-  }
+  function renderHeader() {
+    const today = todayISO();
+    const dateText = new Date().toLocaleDateString("es-ES", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    dateEl.textContent = dateText.charAt(0).toUpperCase() + dateText.slice(1);
 
-  async function loadWidgetContent(w) {
-    const contentEl = container.querySelector(`#widget-content-${w.widget_id}`);
-    try {
-      if (w.widget_id === "upcoming_tasks") {
-        const res = await fetch(`${apiBase}/tasks?status=pending`);
-        const tasks = await res.json();
-        contentEl.innerHTML = renderUpcomingTasks(tasks);
-      } else if (w.widget_id === "active_projects") {
-        const res = await fetch(`${apiBase}/projects?status=active`);
-        const projects = await res.json();
-        contentEl.innerHTML = renderActiveProjects(projects);
-      } else if (w.widget_id === "quick_add_task") {
-        contentEl.innerHTML = renderQuickAddTask();
-        bindQuickAddTask();
-      } else if (w.widget_id === "quick_add_note") {
-        contentEl.innerHTML = renderQuickAddNote();
-        bindQuickAddNote();
-      } else if (w.widget_id === "habits_today") {
-        const res = await fetch(`${apiBase}/habits/today`);
-        const items = await res.json();
-        contentEl.innerHTML = renderHabitsToday(items);
-      } else if (w.widget_id === "habits_week") {
-        const res = await fetch(`${apiBase}/habits/week`);
-        const week = await res.json();
-        contentEl.innerHTML = renderHabitsWeek(week);
-      }
-    } catch (e) {
-      contentEl.innerHTML = `<p class="empty-state">Error cargando contenido.</p>`;
+    const tasks = data.tasks || [];
+    const overdue = tasks.filter((t) => t.due_date && t.due_date < today).length;
+    const dueToday = tasks.filter((t) => t.due_date === today).length;
+    const pending = tasks.length;
+
+    let phrase;
+    if (overdue > 0 && dueToday > 0) {
+      phrase = `${overdue} ${overdue === 1 ? "tarea vencida" : "tareas vencidas"} y ${dueToday} ${
+        dueToday === 1 ? "vence" : "vencen"
+      } hoy.`;
+    } else if (overdue > 0) {
+      phrase = `${overdue} ${overdue === 1 ? "tarea vencida" : "tareas vencidas"}.`;
+    } else if (dueToday > 0) {
+      phrase = `${dueToday} ${dueToday === 1 ? "tarea vence" : "tareas vencen"} hoy.`;
+    } else if (pending > 0) {
+      phrase = `Nada vence hoy. ${pending} ${pending === 1 ? "tarea pendiente" : "tareas pendientes"} en total.`;
+    } else {
+      phrase = "No hay tareas pendientes.";
     }
+    contextEl.textContent = phrase;
   }
 
-  // --- Renderers de widgets -------------------------------------------------
-  function renderUpcomingTasks(tasks) {
-    if (tasks.length === 0) return `<p class="empty-state">No hay tareas pendientes.</p>`;
-    const items = tasks
-      .slice(0, 5)
-      .map(
-        (t) => `
-      <div class="task-item">
-        <strong>${escapeHtml(t.title)}</strong>
-        ${t.due_date ? `<span class="badge badge--status">Vence: ${t.due_date}</span>` : ""}
-        ${t.priority ? `<span class="badge badge--priority-${t.priority}">${t.priority}</span>` : ""}
-      </div>
-    `
-      )
-      .join("");
-    return `<div class="widget-list">${items}${tasks.length > 5 ? `<p class="text-secondary" style="font-size:0.875rem;">+ ${tasks.length - 5} m&aacute;s</p>` : ""}</div>`;
+  function renderMainWidget(w) {
+    if (w.widget_id === "upcoming_tasks") return renderTasksCard();
+    if (w.widget_id === "active_projects") return renderProjectsCard();
+    return "";
   }
 
-  function renderActiveProjects(projects) {
-    if (projects.length === 0) return `<p class="empty-state">No hay proyectos activos.</p>`;
-    const items = projects
-      .slice(0, 5)
-      .map(
-        (p) => `
-      <div class="task-item">
-        <strong>${escapeHtml(p.name)}</strong>
-        <span class="badge badge--status">${p.status}</span>
-      </div>
-    `
-      )
-      .join("");
-    return `<div class="widget-list">${items}${projects.length > 5 ? `<p class="text-secondary" style="font-size:0.875rem;">+ ${projects.length - 5} m&aacute;s</p>` : ""}</div>`;
+  function renderSideWidget(w) {
+    if (w.widget_id === "habits_today") return renderHabitsCard();
+    return "";
   }
 
-  function renderQuickAddTask() {
-    return `
-      <div class="quick-add">
-        <input type="text" id="quick-task-title" aria-label="T&iacute;tulo de la nueva tarea" placeholder="T&iacute;tulo de la nueva tarea">
-        <button class="btn btn--primary btn--sm" id="quick-task-create">Crear</button>
-      </div>
-    `;
+  function renderFullWidget(w) {
+    if (w.widget_id === "habits_week") return renderWeekCard();
+    return "";
   }
 
-  function renderQuickAddNote() {
-    return `
-      <div class="quick-add">
-        <input type="text" id="quick-note-title" aria-label="T&iacute;tulo de la nueva nota" placeholder="T&iacute;tulo de la nueva nota">
-        <button class="btn btn--primary btn--sm" id="quick-note-create">Crear</button>
-      </div>
-    `;
-  }
-
-  function renderHabitsToday(items) {
-    const link = `<p style="margin-top:10px;"><a href="#/habits">Ver todos los h&aacute;bitos &rarr;</a></p>`;
-    if (!items.length) {
-      return `<p class="empty-state">No hay h&aacute;bitos programados hoy.</p>${link}`;
+  // --- Bloque: Atención + Hoy ------------------------------------------------
+  function renderTasksCard() {
+    if (data.tasks === null) {
+      return `
+        <div class="widget-card" id="widget-upcoming_tasks">
+          <div class="widget-header"><span class="widget-title">Tareas</span></div>
+          <div class="widget-content" id="widget-content-upcoming_tasks">
+            ${errorBlock("No se pudieron cargar las tareas.")}
+          </div>
+        </div>
+      `;
     }
-    const badge = (entry) => {
-      if (!entry) return `<span class="badge habit-badge--partial">Pendiente</span>`;
-      if (entry.status === "completed") return `<span class="badge habit-badge--done">Cumplido</span>`;
-      if (entry.status === "skipped") return `<span class="badge habit-badge--skipped">Omitido</span>`;
-      return `<span class="badge habit-badge--partial">Registrado</span>`;
-    };
-    const rows = items
-      .slice(0, 6)
-      .map(
-        (item) => `
-      <div class="task-item">
-        <strong>${escapeHtml(item.habit.name)}</strong>
-        ${badge(item.entry)}
+
+    const today = todayISO();
+    const tasks = data.tasks;
+    const overdue = tasks.filter((t) => t.due_date && t.due_date < today);
+    const dueToday = tasks.filter((t) => t.due_date === today);
+    const attention = [...overdue.map((t) => ({ task: t, kind: "overdue" })), ...dueToday.map((t) => ({ task: t, kind: "today" }))]
+      .sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === "overdue" ? -1 : 1;
+        const pa = a.task.priority === "high" ? 0 : 1;
+        const pb = b.task.priority === "high" ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return (a.task.due_date || "").localeCompare(b.task.due_date || "");
+      });
+
+    const relevant = tasks
+      .filter((t) => isRelevantToday(t, today))
+      .sort((a, b) => {
+        const ra = todayRank(a, today);
+        const rb = todayRank(b, today);
+        if (ra !== rb) return ra - rb;
+        const da = a.due_date || "9999-12-31";
+        const db = b.due_date || "9999-12-31";
+        if (da !== db) return da.localeCompare(db);
+        return a.title.localeCompare(b.title);
+      });
+
+    const attentionHtml = attention.length
+      ? `
+        <section class="home-attention" aria-labelledby="home-attention-title">
+          <div class="home-attention__head">
+            <h2 class="home-section__title" id="home-attention-title">Atenci&oacute;n</h2>
+            <span class="home-attention__count">${attention.length}</span>
+          </div>
+          <ul class="home-attention__list">
+            ${attention
+              .slice(0, MAX_ATTENTION)
+              .map(
+                ({ task, kind }) => `
+              <li class="home-attention__item home-attention__item--${kind}">
+                <span class="home-attention__label">${kind === "overdue" ? "Vencida" : "Vence hoy"}</span>
+                <span class="home-attention__title">${escapeHtml(task.title)}</span>
+                <span class="home-attention__meta">
+                  ${task.priority ? `<span class="badge badge--priority-${task.priority}">${priorityLabel(task.priority)}</span>` : ""}
+                  ${kind === "overdue" ? `<span class="home-attention__date">${task.due_date}</span>` : ""}
+                  ${projectName(task.project_id) ? `<span class="home-attention__project">${escapeHtml(projectName(task.project_id))}</span>` : ""}
+                </span>
+              </li>
+            `
+              )
+              .join("")}
+          </ul>
+          ${attention.length > MAX_ATTENTION ? `<p class="home-more">${attention.length - MAX_ATTENTION} m&aacute;s en Atenci&oacute;n</p>` : ""}
+        </section>
+      `
+      : `
+        <section class="home-attention" aria-labelledby="home-attention-title">
+          <div class="home-attention__head">
+            <h2 class="home-section__title" id="home-attention-title">Atenci&oacute;n</h2>
+          </div>
+          <p class="home-calm">Nada requiere atenci&oacute;n hoy: no hay tareas vencidas ni con vencimiento hoy.</p>
+        </section>
+      `;
+
+    const todayHtml = `
+      <section class="home-today" aria-labelledby="home-today-title">
+        <div class="home-section__head">
+          <h2 class="home-section__title" id="home-today-title">Hoy</h2>
+          <a class="home-section__link" href="#/tasks">Ver todas las tareas</a>
+        </div>
+        ${
+          relevant.length
+            ? `<ul class="home-task-list">
+                ${relevant.slice(0, MAX_TODAY).map((t) => taskRow(t, today)).join("")}
+              </ul>
+              ${
+                relevant.length > MAX_TODAY
+                  ? `<p class="home-more">${relevant.length - MAX_TODAY} ${relevant.length - MAX_TODAY === 1 ? "tarea m&aacute;s" : "tareas m&aacute;s"} en la lista completa</p>`
+                  : ""
+              }`
+            : `<p class="home-calm">No hay tareas relevantes para hoy.</p>`
+        }
+      </section>
+    `;
+
+    return `
+      <div class="widget-card" id="widget-upcoming_tasks">
+        <div class="widget-content" id="widget-content-upcoming_tasks">
+          ${attentionHtml}
+          ${todayHtml}
+        </div>
       </div>
-    `
-      )
-      .join("");
-    const more = items.length > 6
-      ? `<p class="text-secondary" style="font-size:0.875rem;">+ ${items.length - 6} m&aacute;s</p>`
-      : "";
-    return `<div class="widget-list">${rows}${more}</div>${link}`;
+    `;
+  }
+
+  function taskRow(task, today) {
+    const project = projectName(task.project_id);
+    let dueChip = "";
+    if (!task.due_date) {
+      dueChip = `<span class="home-chip home-chip--muted">Sin fecha</span>`;
+    } else if (task.due_date < today) {
+      dueChip = `<span class="home-chip home-chip--danger">Vencida el ${task.due_date}</span>`;
+    } else if (task.due_date === today) {
+      dueChip = `<span class="home-chip home-chip--warning">Vence hoy</span>`;
+    } else {
+      dueChip = `<span class="home-chip">Vence el ${task.due_date}</span>`;
+    }
+    return `
+      <li class="home-task">
+        <button type="button" class="home-task__check" data-action="complete-task" data-id="${task.id}"
+                aria-label="Completar ${escapeHtml(task.title)}" title="Completar">&#10003;</button>
+        <div class="home-task__body">
+          <span class="home-task__title">${escapeHtml(task.title)}</span>
+          <span class="home-task__chips">
+            ${project ? `<span class="home-chip">${escapeHtml(project)}</span>` : ""}
+            ${task.priority ? `<span class="badge badge--priority-${task.priority}">${priorityLabel(task.priority)}</span>` : ""}
+            ${dueChip}
+          </span>
+        </div>
+      </li>
+    `;
+  }
+
+  // --- Bloque: Proyectos en marcha -------------------------------------------
+  function renderProjectsCard() {
+    if (data.projects === null) {
+      return `
+        <div class="widget-card" id="widget-active_projects">
+          <div class="widget-header"><span class="widget-title">Proyectos en marcha</span></div>
+          <div class="widget-content" id="widget-content-active_projects">
+            ${errorBlock("No se pudieron cargar los proyectos.")}
+          </div>
+        </div>
+      `;
+    }
+    const projects = data.projects;
+    return `
+      <div class="widget-card" id="widget-active_projects">
+        <div class="widget-content" id="widget-content-active_projects">
+          <section class="home-projects" aria-labelledby="home-projects-title">
+            <div class="home-section__head">
+              <h2 class="home-section__title" id="home-projects-title">Proyectos en marcha</h2>
+              <a class="home-section__link" href="#/projects">Ver proyectos</a>
+            </div>
+            ${
+              projects.length
+                ? `<ul class="home-project-list">
+                    ${projects.slice(0, MAX_PROJECTS).map(projectRow).join("")}
+                  </ul>
+                  ${projects.length > MAX_PROJECTS ? `<p class="home-more">${projects.length - MAX_PROJECTS} proyectos m&aacute;s activos</p>` : ""}`
+                : `<p class="home-calm">No hay proyectos activos.</p>`
+            }
+          </section>
+        </div>
+      </div>
+    `;
+  }
+
+  function projectRow(project) {
+    const pct = projectProgress(project);
+    const meta = [];
+    if (project.overdue_count > 0) {
+      meta.push(
+        `<span class="home-chip home-chip--danger">${project.overdue_count} ${
+          project.overdue_count === 1 ? "tarea vencida" : "tareas vencidas"
+        }</span>`
+      );
+    }
+    if (project.next_due_date) {
+      meta.push(`<span class="home-chip">Pr&oacute;ximo vencimiento: ${project.next_due_date}</span>`);
+    }
+    return `
+      <li class="home-project">
+        <div class="home-project__head">
+          <a class="home-project__name" href="#/projects/${project.id}">${escapeHtml(project.name)}</a>
+          <span class="home-project__count">${project.completed_count}/${project.task_count}</span>
+        </div>
+        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="${project.task_count}"
+             aria-valuenow="${project.completed_count}"
+             aria-label="Ejecuci&oacute;n de tareas de ${escapeHtml(project.name)}: ${project.completed_count} de ${project.task_count}">
+          <div class="progress__bar" style="width:${pct}%"></div>
+        </div>
+        <div class="home-project__meta">
+          <span class="home-project__label">Ejecuci&oacute;n de tareas</span>
+          ${meta.join("")}
+        </div>
+      </li>
+    `;
+  }
+
+  // --- Bloque: Hábitos de hoy ------------------------------------------------
+  function habitTodayState(item) {
+    if (!item.entry) return "wait";
+    if (item.entry.status === "completed") return "done";
+    if (item.entry.status === "skipped") return "skipped";
+    if (item.entry.status === "pending") return "partial";
+    return "wait";
+  }
+
+  function renderHabitsCard() {
+    if (data.habits === null) {
+      return `
+        <div class="widget-card" id="widget-habits_today">
+          <div class="widget-header"><span class="widget-title">H&aacute;bitos de hoy</span></div>
+          <div class="widget-content" id="widget-content-habits_today">
+            ${errorBlock("No se pudieron cargar los h&aacute;bitos de hoy.")}
+          </div>
+        </div>
+      `;
+    }
+    const items = data.habits;
+    const done = items.filter((i) => habitTodayState(i) === "done").length;
+    return `
+      <div class="widget-card" id="widget-habits_today">
+        <div class="widget-content" id="widget-content-habits_today">
+          <section class="home-habits" aria-labelledby="home-habits-title">
+            <div class="home-section__head">
+              <h2 class="home-section__title" id="home-habits-title">H&aacute;bitos de hoy</h2>
+              <span class="home-section__summary">${done} de ${items.length} cumplidos</span>
+            </div>
+            ${
+              items.length
+                ? `<ul class="home-habit-list">
+                    ${items
+                      .slice(0, MAX_HABITS)
+                      .map((item) => {
+                        const state = habitTodayState(item);
+                        return `
+                        <li class="home-habit">
+                          <span class="home-habit__name">${escapeHtml(item.habit.name)}</span>
+                          <span class="badge badge--${habitStateBadge(state)}">${habitStateLabel(state)}</span>
+                        </li>
+                      `;
+                      })
+                      .join("")}
+                  </ul>
+                  ${items.length > MAX_HABITS ? `<p class="home-more">${items.length - MAX_HABITS} h&aacute;bitos m&aacute;s</p>` : ""}`
+                : `<p class="home-calm">No hay h&aacute;bitos programados para hoy.</p>`
+            }
+            <p class="home-section__foot"><a class="home-section__link" href="#/habits">Abrir h&aacute;bitos</a></p>
+          </section>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Bloque: Captura rápida -----------------------------------------------
+  function renderCaptureSection(sideWidgets) {
+    const showTask = sideWidgets.some((w) => w.widget_id === "quick_add_task");
+    const showNote = sideWidgets.some((w) => w.widget_id === "quick_add_note");
+    if (!showTask && !showNote) return "";
+    const projects = data.projects || [];
+    return `
+      <div class="widget-card" id="widget-quick_add">
+        <div class="widget-content" id="widget-content-quick_add">
+          <section class="home-capture" aria-labelledby="home-capture-title">
+            <h2 class="home-section__title" id="home-capture-title">Captura r&aacute;pida</h2>
+            ${
+              showTask
+                ? `
+              <form class="home-capture__form" data-capture="task" novalidate>
+                <label class="home-capture__label" for="home-task-title">Nueva tarea</label>
+                <input type="text" id="home-task-title" value="${escapeHtml(drafts.task.title)}"
+                       placeholder="T&iacute;tulo de la tarea" required maxlength="200">
+                <select id="home-task-project" aria-label="Proyecto (opcional)">
+                  <option value="">Sin proyecto</option>
+                  ${projects
+                    .map(
+                      (p) =>
+                        `<option value="${p.id}" ${drafts.task.project_id === p.id ? "selected" : ""}>${escapeHtml(p.name)}</option>`
+                    )
+                    .join("")}
+                </select>
+                <button type="submit" class="btn btn--primary btn--sm" ${capturePending.task ? "disabled" : ""}>
+                  ${capturePending.task ? "Guardando&hellip;" : "Crear tarea"}
+                </button>
+                <p class="home-capture__error" role="alert">${captureErrors.task ? escapeHtml(captureErrors.task) : ""}</p>
+              </form>`
+                : ""
+            }
+            ${
+              showNote
+                ? `
+              <form class="home-capture__form" data-capture="note" novalidate>
+                <label class="home-capture__label" for="home-note-title">Nueva nota</label>
+                <input type="text" id="home-note-title" value="${escapeHtml(drafts.note.title)}"
+                       placeholder="T&iacute;tulo de la nota" required maxlength="200">
+                <button type="submit" class="btn btn--secondary btn--sm" ${capturePending.note ? "disabled" : ""}>
+                  ${capturePending.note ? "Guardando&hellip;" : "Crear nota"}
+                </button>
+                <p class="home-capture__error" role="alert">${captureErrors.note ? escapeHtml(captureErrors.note) : ""}</p>
+              </form>`
+                : ""
+            }
+          </section>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- Bloque: Semana de hábitos (HAB-002) -----------------------------------
+  function renderWeekCard() {
+    if (data.week === null) {
+      return `
+        <div class="widget-card" id="widget-habits_week">
+          <div class="widget-header"><span class="widget-title">Semana de h&aacute;bitos</span></div>
+          <div class="widget-content" id="widget-content-habits_week">
+            ${errorBlock("No se pudo cargar la semana de h&aacute;bitos.")}
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <div class="widget-card" id="widget-habits_week">
+        <div class="widget-header"><span class="widget-title">Semana de h&aacute;bitos</span></div>
+        <div class="widget-content" id="widget-content-habits_week">
+          ${renderHabitsWeek(data.week)}
+        </div>
+      </div>
+    `;
   }
 
   function weekCell(habit, day, today) {
@@ -301,9 +636,9 @@ export async function renderHomeView(container, apiBase) {
 
   function renderHabitsWeek(week) {
     currentWeek = week;
-    const link = `<p style="margin-top:10px;"><a href="#/habits">Abrir h&aacute;bitos &rarr;</a></p>`;
+    const link = `<p class="home-section__foot"><a class="home-section__link" href="#/habits">Abrir h&aacute;bitos</a></p>`;
     if (!week.items.length) {
-      return `<p class="empty-state">No hay h&aacute;bitos activos.</p>${link}`;
+      return `<p class="home-calm">No hay h&aacute;bitos activos esta semana.</p>${link}`;
     }
     const names = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
     const head = week.items[0].days
@@ -345,8 +680,16 @@ export async function renderHomeView(container, apiBase) {
       ${link}`;
   }
 
-  // Refresca semana, widget de hoy y el resumen afectado tras editar un
-  // registro, sin recargar toda la aplicación (HAB-002 §1).
+  function errorBlock(message) {
+    return `
+      <div class="home-error" role="alert">
+        <p class="home-error__text">${escapeHtml(message)}</p>
+        <button class="btn btn--secondary btn--sm" data-action="reload-home">Reintentar</button>
+      </div>
+    `;
+  }
+
+  // --- Refresco dirigido tras editar un hábito (HAB-002) --------------------
   async function refreshHabitsViews() {
     const [weekRes, todayRes] = await Promise.all([
       fetch(`${apiBase}/habits/week`),
@@ -357,66 +700,198 @@ export async function renderHomeView(container, apiBase) {
     }
     const week = await weekRes.json();
     const items = await todayRes.json();
+    data.week = week;
+    data.habits = items;
     const weekEl = container.querySelector("#widget-content-habits_week");
     if (weekEl) weekEl.innerHTML = renderHabitsWeek(week);
     const todayEl = container.querySelector("#widget-content-habits_today");
-    if (todayEl) todayEl.innerHTML = renderHabitsToday(items);
-    if (lastSummary) {
-      renderSummary(lastSummary, lastNotesCount, {
-        total: items.length,
-        completed: items.filter(
-          (i) => i.entry && i.entry.status === "completed"
-        ).length,
-      });
+    if (todayEl) todayEl.innerHTML = renderHabitsTodayInner(items);
+  }
+
+  function renderHabitsTodayInner(items) {
+    const done = items.filter((i) => habitTodayState(i) === "done").length;
+    const list = items.length
+      ? `<ul class="home-habit-list">
+          ${items
+            .slice(0, MAX_HABITS)
+            .map((item) => {
+              const state = habitTodayState(item);
+              return `
+              <li class="home-habit">
+                <span class="home-habit__name">${escapeHtml(item.habit.name)}</span>
+                <span class="badge badge--${habitStateBadge(state)}">${habitStateLabel(state)}</span>
+              </li>
+            `;
+            })
+            .join("")}
+        </ul>`
+      : `<p class="home-calm">No hay h&aacute;bitos programados para hoy.</p>`;
+    return `
+      <section class="home-habits" aria-labelledby="home-habits-title">
+        <div class="home-section__head">
+          <h2 class="home-section__title" id="home-habits-title">H&aacute;bitos de hoy</h2>
+          <span class="home-section__summary">${done} de ${items.length} cumplidos</span>
+        </div>
+        ${list}
+        <p class="home-section__foot"><a class="home-section__link" href="#/habits">Abrir h&aacute;bitos</a></p>
+      </section>
+    `;
+  }
+
+  // --- Acciones -------------------------------------------------------------
+  async function completeTask(taskId, button) {
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      const res = await fetch(`${apiBase}/tasks/${taskId}/complete`, { method: "POST" });
+      if (res.ok) {
+        showToast("Tarea completada", "success");
+        await load();
+      } else {
+        button.disabled = false;
+        const err = await res.json().catch(() => ({}));
+        showToast(formatApiDetail(err.detail, "No se pudo completar la tarea"), "error");
+      }
+    } catch (error) {
+      button.disabled = false;
+      showToast("Error de conexión", "error");
     }
   }
 
-  // --- Quick add handlers ---------------------------------------------------
-  function bindQuickAddTask() {
-    const btn = container.querySelector("#quick-task-create");
-    if (!btn) return;
-    btn.addEventListener("click", async () => {
-      const input = container.querySelector("#quick-task-title");
-      const title = input.value.trim();
-      if (!title) return;
+  async function submitQuickTask() {
+    if (capturePending.task) return;
+    const titleEl = container.querySelector("#home-task-title");
+    const projectEl = container.querySelector("#home-task-project");
+    if (titleEl) drafts.task.title = titleEl.value;
+    if (projectEl) drafts.task.project_id = projectEl.value;
+    const title = drafts.task.title.trim();
+    if (!title) {
+      captureErrors.task = "Escribe un título para la tarea.";
+      renderAll();
+      focusCapture("task");
+      return;
+    }
+    capturePending.task = true;
+    captureErrors.task = "";
+    renderAll();
+    try {
+      const body = { title };
+      if (drafts.task.project_id) body.project_id = drafts.task.project_id;
       const res = await fetch(`${apiBase}/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
-        input.value = "";
+        capturePending.task = false;
+        drafts.task = { title: "", project_id: "" };
         showToast("Tarea creada", "success");
         await load();
       } else {
-        const err = await res.json();
-        showToast(err.detail || "Error creando tarea", "error");
+        capturePending.task = false;
+        const err = await res.json().catch(() => ({}));
+        captureErrors.task = formatApiDetail(err.detail, "No se pudo crear la tarea.");
+        renderAll();
+        focusCapture("task");
       }
-    });
+    } catch (error) {
+      capturePending.task = false;
+      captureErrors.task = "Error de conexión. Inténtalo de nuevo.";
+      renderAll();
+      focusCapture("task");
+    }
   }
 
-  function bindQuickAddNote() {
-    const btn = container.querySelector("#quick-note-create");
-    if (!btn) return;
-    btn.addEventListener("click", async () => {
-      const input = container.querySelector("#quick-note-title");
-      const title = input.value.trim();
-      if (!title) return;
+  async function submitQuickNote() {
+    if (capturePending.note) return;
+    const titleEl = container.querySelector("#home-note-title");
+    if (titleEl) drafts.note.title = titleEl.value;
+    const title = drafts.note.title.trim();
+    if (!title) {
+      captureErrors.note = "Escribe un título para la nota.";
+      renderAll();
+      focusCapture("note");
+      return;
+    }
+    capturePending.note = true;
+    captureErrors.note = "";
+    renderAll();
+    try {
       const res = await fetch(`${apiBase}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, content: "" }),
       });
       if (res.ok) {
-        input.value = "";
+        capturePending.note = false;
+        drafts.note = { title: "" };
         showToast("Nota creada", "success");
         await load();
       } else {
-        const err = await res.json();
-        showToast(err.detail || "Error creando nota", "error");
+        capturePending.note = false;
+        const err = await res.json().catch(() => ({}));
+        captureErrors.note = formatApiDetail(err.detail, "No se pudo crear la nota.");
+        renderAll();
+        focusCapture("note");
       }
-    });
+    } catch (error) {
+      capturePending.note = false;
+      captureErrors.note = "Error de conexión. Inténtalo de nuevo.";
+      renderAll();
+      focusCapture("note");
+    }
   }
+
+  function focusCapture(kind) {
+    const id = kind === "task" ? "#home-task-title" : "#home-note-title";
+    const el = container.querySelector(id);
+    if (el) el.focus();
+  }
+
+  // Delegación de eventos: el contenido se re-renderiza con frecuencia.
+  container.addEventListener("click", async (event) => {
+    const completeBtn = event.target.closest('[data-action="complete-task"]');
+    if (completeBtn) {
+      await completeTask(completeBtn.dataset.id, completeBtn);
+      return;
+    }
+
+    const reloadBtn = event.target.closest('[data-action="reload-home"]');
+    if (reloadBtn) {
+      await load();
+      return;
+    }
+
+    const cell = event.target.closest('[data-action="wk-edit"]');
+    if (cell) {
+      if (!currentWeek) return;
+      const item = currentWeek.items.find((i) => i.habit.id === cell.dataset.id);
+      if (!item) return;
+      const day = item.days.find((d) => d.date === cell.dataset.date);
+      if (!day) return;
+      openHabitEntryEditor({
+        apiBase,
+        habit: item.habit,
+        date: day.date,
+        entry: day.entry_status ? { status: day.entry_status, value: day.entry_value } : null,
+        today: currentWeek.today,
+        onSaved: refreshHabitsViews,
+        getFallbackFocus: () => container.querySelector("#widget-habits_week"),
+        returnFocusTo: cell,
+      });
+    }
+  });
+
+  container.addEventListener("submit", async (event) => {
+    const form = event.target.closest("form[data-capture]");
+    if (!form) return;
+    event.preventDefault();
+    if (form.dataset.capture === "task") {
+      await submitQuickTask();
+    } else if (form.dataset.capture === "note") {
+      await submitQuickNote();
+    }
+  });
 
   // --- Configuración de widgets (modal) -------------------------------------
   function openConfig() {
@@ -425,7 +900,7 @@ export async function renderHomeView(container, apiBase) {
     overlay.innerHTML = `
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="config-title">
         <h2 class="modal__title" id="config-title">Configurar widgets</h2>
-        <p class="modal__text">Selecciona qu&eacute; widgets mostrar y su orden.</p>
+        <p class="modal__text">Selecciona qu&eacute; secciones mostrar y su orden.</p>
         <div id="widgets-config" style="margin-bottom: 16px;"></div>
         <div class="modal__actions">
           <button class="btn btn--secondary" id="widgets-cancel-btn">Cancelar</button>
@@ -538,29 +1013,6 @@ export async function renderHomeView(container, apiBase) {
 
   editBtn.addEventListener("click", openConfig);
 
-  // Edición de celdas de la semana (delegación: el contenido se re-renderiza).
-  gridEl.addEventListener("click", (event) => {
-    const cell = event.target.closest('[data-action="wk-edit"]');
-    if (!cell || !gridEl.contains(cell)) return;
-    if (!currentWeek) return;
-    const item = currentWeek.items.find((i) => i.habit.id === cell.dataset.id);
-    if (!item) return;
-    const day = item.days.find((d) => d.date === cell.dataset.date);
-    if (!day) return;
-    openHabitEntryEditor({
-      apiBase,
-      habit: item.habit,
-      date: day.date,
-      entry: day.entry_status
-        ? { status: day.entry_status, value: day.entry_value }
-        : null,
-      today: currentWeek.today,
-      onSaved: refreshHabitsViews,
-      getFallbackFocus: () => container.querySelector("#widget-habits_week"),
-      returnFocusTo: cell,
-    });
-  });
-
   await load();
 }
 
@@ -569,5 +1021,8 @@ function escapeHtml(text) {
   div.textContent = text;
   // Escapa también comillas: los valores usados en atributos (aria-label,
   // title) deben seguir siendo seguros con nombres de usuario.
-  return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const amp = String.fromCharCode(38);
+  return div.innerHTML
+    .replace(/"/g, `${amp}quot;`)
+    .replace(/'/g, `${amp}#39;`);
 }

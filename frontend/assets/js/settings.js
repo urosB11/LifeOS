@@ -212,7 +212,10 @@ function applyTheme(theme) {
   currentTheme = theme || "system";
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const useDark = currentTheme === "dark" || (currentTheme === "system" && prefersDark);
+  // `:root` ya define la paleta oscura: para el tema claro hay que marcar
+  // explícitamente `theme-light` en el body (si no, nunca se aplica).
   document.body.classList.toggle("theme-dark", useDark);
+  document.body.classList.toggle("theme-light", currentTheme === "light");
 }
 
 // "Sistema" sigue la preferencia del SO en tiempo real

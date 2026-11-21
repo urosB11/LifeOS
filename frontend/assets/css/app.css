@@ -459,6 +459,397 @@ body {
   font-size: 0.9375rem;
 }
 
+/* --- Home como centro de operaciones (HOME-001) -------------------------- *
+ * Reutiliza los tokens y componentes compartidos (.widget-card, .progress,
+ * .badge, .empty-state). La jerarquía es: Attention > Hoy > Proyectos en
+ * marcha en la columna amplia; Hábitos y Captura rápida en la secundaria. */
+.home-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(300px, 1fr);
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.home-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  min-width: 0;
+}
+
+.home-col--full {
+  grid-column: 1 / -1;
+}
+
+.home-context {
+  margin: 4px 0 0;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.home-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.home-section__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+
+.home-section__summary {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.home-section__link {
+  font-size: 0.875rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.home-section__link:hover {
+  text-decoration: underline;
+}
+
+.home-section__foot {
+  margin: 12px 0 0;
+}
+
+/* Bloque dominante: qué requiere atención */
+.home-attention {
+  border-left: 3px solid var(--border);
+  padding-left: var(--spacing);
+  margin-bottom: var(--spacing-lg);
+}
+
+.home-attention__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.home-attention__count {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface-hover);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+
+.home-attention__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.home-attention__item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 10px;
+  border-left: 2px solid transparent;
+}
+
+.home-attention__item--overdue {
+  border-left-color: var(--danger);
+}
+
+.home-attention__item--today {
+  border-left-color: var(--warning);
+}
+
+.home-attention__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.home-attention__item--overdue .home-attention__label {
+  color: var(--danger);
+}
+
+.home-attention__item--today .home-attention__label {
+  color: var(--warning);
+}
+
+.home-attention__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.home-attention__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+/* Lista de hoy */
+.home-task-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.home-task:last-child {
+  border-bottom: none;
+}
+
+.home-task__check {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: transparent;
+  font-size: 0.6875rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.home-task__check:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.home-task__check:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.home-task__check:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.home-task__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.home-task__title {
+  font-size: 0.9375rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.home-task__chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.home-chip {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  border-radius: var(--radius-sm);
+  padding: 1px 7px;
+}
+
+.home-chip--danger {
+  color: var(--danger);
+  background: var(--danger-subtle);
+}
+
+.home-chip--warning {
+  color: var(--warning);
+  background: var(--warning-subtle);
+}
+
+.home-chip--muted {
+  color: var(--text-muted);
+}
+
+/* Proyectos en marcha */
+.home-project-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.home-project__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.home-project__name {
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.home-project__name:hover {
+  color: var(--accent);
+}
+
+.home-project__count {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.home-project__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.home-project__label {
+  color: var(--text-muted);
+}
+
+/* Hábitos de hoy */
+.home-habit-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.home-habit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.home-habit:last-child {
+  border-bottom: none;
+}
+
+.home-habit__name {
+  font-size: 0.9375rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Captura rápida */
+.home-capture__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.home-capture__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.home-capture__form input[type="text"],
+.home-capture__form select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9375rem;
+}
+
+.home-capture__form input[type="text"]:focus-visible,
+.home-capture__form select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.home-capture__form button {
+  align-self: flex-start;
+}
+
+.home-capture__error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--danger);
+  min-height: 0;
+}
+
+.home-capture__error:empty {
+  display: none;
+}
+
+/* Estados vacíos, avisos y errores */
+.home-calm {
+  margin: 10px 0 0;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.home-more {
+  margin: 10px 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.home-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-subtle);
+}
+
+.home-error__text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
 /* --- Tema oscuro: los tokens viven en vars.css (Fase 8A) --- */
 /* Los tokens se resuelven automáticamente; no se necesitan overrides aquí. */
 
@@ -1054,6 +1445,17 @@ button.wk-cell {
 @media (min-width: 769px) and (max-width: 1023px) {
   .main {
     max-width: 900px;
+  }
+}
+
+/* Home: una sola columna en tablet y móvil (HOME-001). */
+@media (max-width: 1023px) {
+  .home-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-col--full {
+    grid-column: auto;
   }
 }
 
