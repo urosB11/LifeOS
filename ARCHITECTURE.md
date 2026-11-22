@@ -144,10 +144,12 @@ Work, Business, Finance, Mind, App Center ampliado y AI Orchestrator se mantiene
 
 - El catálogo de widgets se define en código y usa IDs estables.
 - El MVP incluye `upcoming_tasks`, `active_projects`, `quick_add_task`, `quick_add_note`, `habits_today` y `habits_week`.
-- La base almacena visibilidad y posición, no código ejecutable.
+- La base almacena visibilidad, orden global y spans lógicos de grid validados, no coordenadas en píxeles ni código ejecutable.
 - Los widgets consultan servicios o endpoints existentes.
 - Los errores de un widget no deben impedir renderizar el resto del dashboard.
-- El usuario puede reordenarlos con controles de teclado y mouse accesibles; drag-and-drop queda fuera del primer alcance.
+- El usuario puede reordenarlos y redimensionarlos en modo Personalizar, solo desde asas explícitas y con alternativas de teclado/táctiles accesibles.
+- La colocación usa CSS Grid auto-flow y tamaños responsive; el orden y los spans persistidos nunca crean solapamientos ni recortan contenido.
+- Captura rápida conserva visibilidad independiente por acción, pero se mueve y redimensiona como una tarjeta visual.
 - `config_json` solo se usa cuando un widget tenga opciones reales y validadas.
 - No ejecutar plugins dinámicos ni código descargado.
 

@@ -22,7 +22,7 @@ Conservar tareas, proyectos, notas, etiquetas, hábitos, sus registros diarios, 
 | `note_task_links` | Relación muchos-a-muchos nota/tarea. |
 | `tags` | Catálogo compartido de etiquetas. |
 | `note_tags` | Asignaciones muchos-a-muchos nota/etiqueta. |
-| `widget_preferences` | Visibilidad y orden de widgets. |
+| `widget_preferences` | Visibilidad, orden y dimensiones lógicas de los widgets. |
 | `user_preferences` | Preferencias básicas de la instalación. |
 | `activity_events` | Historial de cambios relevantes. |
 | `habits` | Hábitos con frecuencia, estado y objetivo opcional (Fase 7). |
@@ -170,11 +170,13 @@ PK compuesta (`note_id`, `tag_id`). Eliminar una nota elimina sus asignaciones, 
 |---|---|---|
 | `widget_id` | TEXT | PK; ID estable del catálogo en código. |
 | `is_visible` | INTEGER/BOOLEAN | Obligatorio. |
-| `position` | INTEGER | Obligatorio, no negativo. |
+| `position` | INTEGER | Obligatorio, no negativo; orden global de auto-colocación. |
+| `column_span` | INTEGER | Obligatorio; entero validado entre 2 y 6. |
+| `row_span` | INTEGER | Obligatorio; entero validado entre 1 y 3. |
 | `config_json` | TEXT | Nullable; solo opciones validadas del widget. |
 | `updated_at` | TEXT | Instante UTC obligatorio. |
 
-IDs del catálogo MVP: `upcoming_tasks`, `active_projects`, `quick_add_task`, `quick_add_note`. El orden inicial sigue ese orden. Si no existe preferencia guardada, se utilizan los defaults del catálogo.
+IDs del catálogo MVP: `upcoming_tasks`, `active_projects`, `quick_add_task`, `quick_add_note`, `habits_today` y `habits_week`. Los defaults de spans son específicos del catálogo. La migración transforma el orden anterior por zonas intercalando cada widget de `main` con el grupo Captura rápida y luego el siguiente widget de `main`; conserva el orden relativo previo dentro de cada zona y coloca `full` al final. El orden relativo y la visibilidad de las acciones del grupo Captura rápida se conservan. Si no existe preferencia guardada, se utilizan los defaults del catálogo.
 
 ### 5.9 `user_preferences`
 
@@ -316,7 +318,7 @@ Si el denominador es cero (sin días programados en el período), mostrar “Sin
 
 ### 9.1 Exportación JSON
 
-La exportación incluye `format_version`, `exported_at`, `projects`, `tasks`, `notes`, `note_project_links`, `note_task_links`, `tags`, `note_tags`, `habits`, `habit_entries`, `widget_preferences`, `user_preferences` y `activity_events`. Se define de manera independiente del ORM y conserva IDs y relaciones.
+La exportación incluye `format_version`, `exported_at`, `projects`, `tasks`, `notes`, `note_project_links`, `note_task_links`, `tags`, `note_tags`, `habits`, `habit_entries`, `widget_preferences`, `user_preferences` y `activity_events`. Se define de manera independiente del ORM y conserva IDs, relaciones y preferencias `position`, `column_span` y `row_span`. El cambio de forma incrementa `format_version`.
 
 No se implementa importación de JSON desde la interfaz en el MVP.
 

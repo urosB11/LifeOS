@@ -4,10 +4,8 @@
 // hoy, qué proyectos están en marcha, cómo vienen los hábitos y cómo
 // capturar una tarea o una nota.
 //
-// El catálogo de widgets se conserva intacto (ids, orden, visibilidad y
-// preferencias): cada widget del catálogo alimenta una sección de la nueva
-// estructura. La visibilidad oculta la sección; el orden define el orden
-// dentro de cada columna. No se agregan endpoints ni dependencias.
+// El catálogo de widgets se conserva intacto (ids y visibilidad). El orden
+// global y los spans lógicos de grid definen su colocación responsive.
 //
 // UX-01 añade: fecha con la zona horaria configurada, estados por bloque
 // (carga/error/vacío con reintento individual), fallback del catálogo si
@@ -24,24 +22,7 @@ import {
   openHabitEntryEditor,
 } from "./habit-entry.js";
 
-// Rol de cada widget del catálogo dentro de la nueva estructura:
-// "main" = columna amplia · "side" = columna secundaria · "full" = ancho completo.
-const WIDGET_ROLES = {
-  upcoming_tasks: "main",
-  active_projects: "main",
-  habits_today: "side",
-  quick_add_task: "side",
-  quick_add_note: "side",
-  habits_week: "full",
-};
-
-const WIDGET_ZONES = ["main", "side", "full"];
 const CAPTURE_WIDGET_IDS = ["quick_add_task", "quick_add_note"];
-const ZONE_LABELS = {
-  main: "columna principal",
-  side: "columna secundaria",
-  full: "ancho completo",
-};
 
 const MAX_ATTENTION = 5;
 const MAX_TODAY = 8;
@@ -58,12 +39,12 @@ const RELEVANT_WINDOW_DAYS = 7;
 // (UX-01 §5) y el aviso ofrece reintento. No sustituye las preferencias
 // reales: mientras falle, guardar preferencias queda bloqueado.
 const DEFAULT_WIDGETS = [
-  { widget_id: "upcoming_tasks", label: "Tareas próximas", is_visible: true, position: 0 },
-  { widget_id: "active_projects", label: "Proyectos activos", is_visible: true, position: 1 },
-  { widget_id: "quick_add_task", label: "Nueva tarea", is_visible: true, position: 2 },
-  { widget_id: "quick_add_note", label: "Nueva nota", is_visible: true, position: 3 },
-  { widget_id: "habits_today", label: "Hábitos de hoy", is_visible: true, position: 4 },
-  { widget_id: "habits_week", label: "Semana de hábitos", is_visible: true, position: 5 },
+  { widget_id: "upcoming_tasks", label: "Tareas próximas", is_visible: true, position: 0, column_span: 4, row_span: 1 },
+  { widget_id: "quick_add_task", label: "Nueva tarea", is_visible: true, position: 1, column_span: 2, row_span: 1 },
+  { widget_id: "quick_add_note", label: "Nueva nota", is_visible: true, position: 1, column_span: 2, row_span: 1 },
+  { widget_id: "active_projects", label: "Proyectos activos", is_visible: true, position: 2, column_span: 4, row_span: 1 },
+  { widget_id: "habits_today", label: "Hábitos de hoy", is_visible: true, position: 3, column_span: 2, row_span: 1 },
+  { widget_id: "habits_week", label: "Semana de hábitos", is_visible: true, position: 4, column_span: 6, row_span: 1 },
 ];
 
 // Mismo default que app/core/clock.py (DEFAULT_TIMEZONE): si la zona
@@ -98,18 +79,12 @@ export async function renderHomeView(container, apiBase) {
 
     <div id="home-customize-panel"></div>
 
-    <div class="home-layout">
-      <div class="home-col home-col--main" id="home-main" data-home-zone="main"></div>
-      <div class="home-col home-col--side" id="home-side" data-home-zone="side"></div>
-      <div class="home-col home-col--full" id="home-full" data-home-zone="full"></div>
-    </div>
+    <div class="home-layout" id="home-grid" data-home-grid></div>
   `;
 
   const dateEl = container.querySelector("#home-date");
   const contextEl = container.querySelector("#home-context");
-  const mainEl = container.querySelector("#home-main");
-  const sideEl = container.querySelector("#home-side");
-  const fullEl = container.querySelector("#home-full");
+  const homeGridEl = container.querySelector("#home-grid");
   const editBtn = container.querySelector("#widgets-edit-btn");
   const editLabel = container.querySelector("#widgets-edit-label");
   const customizePanel = container.querySelector("#home-customize-panel");
@@ -144,6 +119,7 @@ export async function renderHomeView(container, apiBase) {
   let widgetSaveError = "";
   let widgetAnnouncement = "";
   let dragState = null;
+  let resizeState = null;
 
   // --- Utilidades -----------------------------------------------------------
   function todayISO() {
@@ -366,15 +342,13 @@ export async function renderHomeView(container, apiBase) {
   }
 
   function renderGlobalLoading() {
-    mainEl.innerHTML = `<div class="widget-card"><p class="empty-state">Cargando Home&hellip;</p></div>`;
-    sideEl.innerHTML = "";
-    fullEl.innerHTML = "";
+    homeGridEl.innerHTML = `<div class="widget-card"><p class="empty-state">Cargando Home&hellip;</p></div>`;
   }
 
   // Solo ante una excepción inesperada de render: los fallos de API se
   // resuelven por bloque y el catálogo tiene fallback (UX-01 §5).
   function renderGlobalError() {
-    mainEl.innerHTML = `
+    homeGridEl.innerHTML = `
       <div class="widget-card">
         <div class="empty-state">
           <div class="empty-state__icon" aria-hidden="true">&#9888;</div>
@@ -384,8 +358,6 @@ export async function renderHomeView(container, apiBase) {
         </div>
       </div>
     `;
-    sideEl.innerHTML = "";
-    fullEl.innerHTML = "";
   }
 
   // --- Estructura -----------------------------------------------------------
@@ -397,64 +369,70 @@ export async function renderHomeView(container, apiBase) {
     return source.filter((w) => w.is_visible).sort((a, b) => a.position - b.position);
   }
 
-  function visibleWidgetGroups(zone, source = activeWidgetPreferences()) {
-    const inZone = source
-      .filter((w) => w.is_visible && WIDGET_ROLES[w.widget_id] === zone)
-      .sort((a, b) => a.position - b.position);
+  function widgetGroups(source, visibleOnly = false) {
+    const ordered = source
+      .filter((widget) => !visibleOnly || widget.is_visible)
+      .slice()
+      .sort((a, b) => a.position - b.position || a.widget_id.localeCompare(b.widget_id));
     const groups = [];
     let captureAdded = false;
-    for (const widget of inZone) {
+    for (const widget of ordered) {
       if (CAPTURE_WIDGET_IDS.includes(widget.widget_id)) {
         if (captureAdded) continue;
         captureAdded = true;
         const captureWidgets = source
-          .filter((item) => WIDGET_ROLES[item.widget_id] === zone && CAPTURE_WIDGET_IDS.includes(item.widget_id))
+          .filter((item) => CAPTURE_WIDGET_IDS.includes(item.widget_id))
           .sort((a, b) => a.position - b.position);
+        const visibleCapture = captureWidgets.filter((item) => item.is_visible);
+        if (visibleOnly && !visibleCapture.length) continue;
         groups.push({
           id: "quick_add",
           widgetIds: captureWidgets.map((item) => item.widget_id),
           label: "Captura rápida",
-          zone,
+          columnSpan: captureWidgets[0]?.column_span || 2,
+          rowSpan: captureWidgets[0]?.row_span || 1,
         });
       } else {
         groups.push({
           id: widget.widget_id,
           widgetIds: [widget.widget_id],
           label: widget.label,
-          zone,
+          columnSpan: widget.column_span,
+          rowSpan: widget.row_span,
         });
       }
     }
     return groups;
   }
 
-  function widgetCardAttrs(groupId, widgetIds, zone) {
-    return `class="widget-card home-widget-card" data-widget-group="${groupId}" data-widget-ids="${widgetIds.join(" ")}" data-widget-zone="${zone}" tabindex="-1"`;
+  function visibleWidgetGroups(source = activeWidgetPreferences()) {
+    return widgetGroups(source, true);
   }
 
   function decorateWidgetCard(markup, group) {
     return markup.replace(/<div class="widget-card"([^>]*)>/, (_match, attrs) => {
       const cleanAttrs = attrs.replace(/\s+tabindex="-1"/g, "");
-      return `<div ${widgetCardAttrs(group.id, group.widgetIds, group.zone)}${cleanAttrs}>${widgetEditorMarkup(group.id, group.label, group.zone)}`;
+      const cardAttrs = `class="widget-card home-widget-card" data-widget-group="${group.id}" data-widget-ids="${group.widgetIds.join(" ")}" data-column-span="${group.columnSpan}" data-row-span="${group.rowSpan}" tabindex="-1"`;
+      return `<div ${cardAttrs}${cleanAttrs}>${widgetEditorMarkup(group.id, group.label)}`;
     });
   }
 
-  function widgetEditorMarkup(groupId, label, zone) {
+  function widgetEditorMarkup(groupId, label) {
     if (!customizingWidgets) return "";
-    const groups = visibleWidgetGroups(zone);
-    if (groups.length < 2) return "";
+    const groups = visibleWidgetGroups();
     const index = groups.findIndex((group) => group.id === groupId);
     const disabled = widgetSaveState === "saving";
     return `
       <div class="home-widget-editor">
-        <span class="home-widget-handle" data-action="widget-drag-handle"
-              data-widget-group="${groupId}" aria-hidden="true">
+        <button type="button" class="home-widget-handle" data-action="widget-drag-handle"
+                data-widget-group="${groupId}" aria-label="Mover ${escapeHtml(label)}"
+                ${disabled || groups.length < 2 ? "disabled" : ""}>
           <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
             <circle cx="6" cy="4" r="1.25"/><circle cx="12" cy="4" r="1.25"/>
             <circle cx="6" cy="9" r="1.25"/><circle cx="12" cy="9" r="1.25"/>
             <circle cx="6" cy="14" r="1.25"/><circle cx="12" cy="14" r="1.25"/>
           </svg>
-        </span>
+        </button>
         <div class="home-widget-editor__moves">
           <button type="button" class="home-widget-move" id="widget-move-${groupId}-up"
                   data-action="move-widget" data-widget-group="${groupId}" data-direction="up"
@@ -462,57 +440,39 @@ export async function renderHomeView(container, apiBase) {
           <button type="button" class="home-widget-move" id="widget-move-${groupId}-down"
                   data-action="move-widget" data-widget-group="${groupId}" data-direction="down"
                   aria-label="Mover ${escapeHtml(label)} abajo" ${disabled || index === groups.length - 1 ? "disabled" : ""}>↓</button>
+          <button type="button" class="home-widget-resize" data-action="widget-resize-handle"
+                  data-widget-group="${groupId}" aria-label="Cambiar tamaño de ${escapeHtml(label)}"
+                  ${disabled ? "disabled" : ""}>↘</button>
         </div>
       </div>
     `;
   }
 
-  function normalizeWidgetDraftByZones() {
+  function normalizeWidgetDraftByOrder() {
     if (!widgetDraft) return;
-    const orderedIds = [];
-    const seen = new Set();
-    const append = (id) => {
-      if (seen.has(id)) return;
-      seen.add(id);
-      orderedIds.push(id);
-    };
-    for (const zone of WIDGET_ZONES) {
-      for (const group of visibleWidgetGroups(zone, widgetDraft)) {
-        group.widgetIds.forEach(append);
-      }
-    }
-    const hidden = widgetDraft
-      .filter((widget) => !widget.is_visible)
-      .sort((a, b) => a.position - b.position);
-    hidden.forEach((widget) => append(widget.widget_id));
-    for (const widget of widgetDraft.slice().sort((a, b) => a.position - b.position)) {
-      append(widget.widget_id);
-    }
-    const positions = new Map(orderedIds.map((id, index) => [id, index]));
-    widgetDraft = widgetDraft.map((widget) => ({
-      ...widget,
-      position: positions.get(widget.widget_id),
-    }));
+    const positions = new Map();
+    widgetGroups(widgetDraft).forEach((group, index) => {
+      group.widgetIds.forEach((id) => positions.set(id, index));
+    });
+    widgetDraft = widgetDraft.map((widget) => ({ ...widget, position: positions.get(widget.widget_id) }));
   }
 
   function normalizeWidgetDraftFromDom() {
     if (!widgetDraft) return;
-    const orderedIds = [];
-    for (const zone of WIDGET_ZONES) {
-      const zoneEl = container.querySelector(`[data-home-zone="${zone}"]`);
-      for (const card of zoneEl.querySelectorAll(".home-widget-card")) {
-        for (const id of card.dataset.widgetIds.split(" ")) {
-          if (id && !orderedIds.includes(id)) orderedIds.push(id);
-        }
-      }
+    const groups = widgetGroups(widgetDraft);
+    const groupById = new Map(groups.map((group) => [group.id, group]));
+    const orderedGroups = [];
+    for (const card of homeGridEl.querySelectorAll(".home-widget-card")) {
+      const group = groupById.get(card.dataset.widgetGroup);
+      if (group && !orderedGroups.includes(group)) orderedGroups.push(group);
     }
-    const hidden = widgetDraft
-      .filter((widget) => !widget.is_visible)
-      .sort((a, b) => a.position - b.position);
-    for (const widget of hidden) {
-      if (!orderedIds.includes(widget.widget_id)) orderedIds.push(widget.widget_id);
+    for (const group of groups) {
+      if (!orderedGroups.includes(group)) orderedGroups.push(group);
     }
-    const positions = new Map(orderedIds.map((id, index) => [id, index]));
+    const positions = new Map();
+    orderedGroups.forEach((group, index) => {
+      group.widgetIds.forEach((id) => positions.set(id, index));
+    });
     widgetDraft = widgetDraft.map((widget) => ({
       ...widget,
       position: positions.get(widget.widget_id),
@@ -524,7 +484,10 @@ export async function renderHomeView(container, apiBase) {
     const savedById = new Map(widgets.map((widget) => [widget.widget_id, widget]));
     return widgetDraft.some((widget) => {
       const saved = savedById.get(widget.widget_id);
-      return !saved || saved.position !== widget.position || saved.is_visible !== widget.is_visible;
+      return !saved || saved.position !== widget.position
+        || saved.is_visible !== widget.is_visible
+        || saved.column_span !== widget.column_span
+        || saved.row_span !== widget.row_span;
     });
   }
 
@@ -539,7 +502,7 @@ export async function renderHomeView(container, apiBase) {
       <section class="home-customize-panel" aria-labelledby="home-customize-title">
         <div class="home-customize-panel__intro">
           <h2 id="home-customize-title">Personalizar secciones</h2>
-          <p>Ordena cada columna con las asas o los botones. Las zonas no se pueden cambiar.</p>
+          <p>Usa las flechas para mover. Arrastra ↘ o usa sus flechas para cambiar el tamaño.</p>
         </div>
         <fieldset class="home-customize-visibility">
           <legend>Secciones visibles o disponibles</legend>
@@ -553,7 +516,7 @@ export async function renderHomeView(container, apiBase) {
                            aria-label="${escapeHtml(widget.label)} visible"
                            ${widget.is_visible ? "checked" : ""} ${isSaving ? "disabled" : ""}>
                     <span class="home-customize-toggle__name">${escapeHtml(widget.label)}</span>
-                    <span class="home-customize-toggle__zone">${ZONE_LABELS[WIDGET_ROLES[widget.widget_id]] || "columna principal"}</span>
+                    <span class="home-customize-toggle__zone">${widget.column_span} × ${widget.row_span} en pantalla amplia</span>
                     <span class="home-customize-toggle__state">${widget.is_visible ? "Visible" : "Oculta"}</span>
                   </label>
                 `
@@ -654,7 +617,7 @@ export async function renderHomeView(container, apiBase) {
 
     const visible = visibleWidgets();
     if (visible.length === 0) {
-      mainEl.innerHTML = `
+      homeGridEl.innerHTML = `
         <div class="widget-card">
           <div class="empty-state">
             <div class="empty-state__icon" aria-hidden="true">&#9881;</div>
@@ -664,35 +627,13 @@ export async function renderHomeView(container, apiBase) {
           </div>
         </div>
       `;
-      sideEl.innerHTML = "";
-      fullEl.innerHTML = "";
       restoreFocus();
       return;
     }
 
-    const byRole = { main: [], side: [], full: [] };
-    visible.forEach((w) => {
-      const role = WIDGET_ROLES[w.widget_id] || "main";
-      byRole[role].push(w);
-    });
-
-    mainEl.innerHTML = byRole.main.map(renderMainWidget).join("");
-
-    // La captura rápida agrupa los dos widgets de acceso rápido en una
-    // sección; se renderiza una sola vez, en la posición del primero.
-    let captureRendered = false;
-    sideEl.innerHTML = byRole.side
-      .map((w) => {
-        if (w.widget_id === "quick_add_task" || w.widget_id === "quick_add_note") {
-          if (captureRendered) return "";
-          captureRendered = true;
-          return renderCaptureSection(byRole.side);
-        }
-        return renderSideWidget(w);
-      })
+    homeGridEl.innerHTML = visibleWidgetGroups()
+      .map(renderWidgetGroup)
       .join("");
-
-    fullEl.innerHTML = byRole.full.map(renderFullWidget).join("");
     restoreFocus();
   }
 
@@ -746,39 +687,20 @@ export async function renderHomeView(container, apiBase) {
     contextEl.textContent = phrase;
   }
 
-  function renderMainWidget(w) {
-    const group = {
-      id: w.widget_id,
-      widgetIds: [w.widget_id],
-      label: w.label,
-      zone: "main",
-    };
-    if (w.widget_id === "upcoming_tasks") return decorateWidgetCard(renderTasksCard(), group);
-    if (w.widget_id === "active_projects") return decorateWidgetCard(renderProjectsCard(), group);
-    return "";
-  }
-
-  function renderSideWidget(w) {
-    if (w.widget_id === "habits_today") {
-      return decorateWidgetCard(renderHabitsCard(), {
-        id: w.widget_id,
-        widgetIds: [w.widget_id],
-        label: w.label,
-        zone: "side",
-      });
+  function renderWidgetGroup(group) {
+    if (group.id === "upcoming_tasks") {
+      return decorateWidgetCard(renderTasksCard(), group);
     }
-    return "";
-  }
-
-  function renderFullWidget(w) {
-    if (w.widget_id === "habits_week") {
-      return decorateWidgetCard(renderWeekCard(), {
-        id: w.widget_id,
-        widgetIds: [w.widget_id],
-        label: w.label,
-        zone: "full",
-      });
+    if (group.id === "active_projects") {
+      return decorateWidgetCard(renderProjectsCard(), group);
     }
+    if (group.id === "habits_today") {
+      return decorateWidgetCard(renderHabitsCard(), group);
+    }
+    if (group.id === "habits_week") {
+      return decorateWidgetCard(renderWeekCard(), group);
+    }
+    if (group.id === "quick_add") return renderCaptureSection(visibleWidgets());
     return "";
   }
 
@@ -1068,6 +990,9 @@ export async function renderHomeView(container, apiBase) {
     const showTask = sideWidgets.some((w) => w.widget_id === "quick_add_task");
     const showNote = sideWidgets.some((w) => w.widget_id === "quick_add_note");
     if (!showTask && !showNote) return "";
+    const capturePreference = activeWidgetPreferences().find((widget) =>
+      CAPTURE_WIDGET_IDS.includes(widget.widget_id)
+    );
     captureMode = showTask && showNote ? captureMode : showTask ? "task" : "note";
     const showModeSelector = showTask && showNote;
     const projects = data.projects || [];
@@ -1134,7 +1059,8 @@ export async function renderHomeView(container, apiBase) {
       id: "quick_add",
       widgetIds: CAPTURE_WIDGET_IDS,
       label: "Captura rápida",
-      zone: "side",
+      columnSpan: capturePreference?.column_span || 2,
+      rowSpan: capturePreference?.row_span || 1,
     });
   }
 
@@ -1430,13 +1356,34 @@ export async function renderHomeView(container, apiBase) {
   }
 
   container.addEventListener("pointerdown", startWidgetDrag, { signal: eventController.signal });
-  container.addEventListener("pointermove", moveWidgetDrag, { signal: eventController.signal });
-  container.addEventListener("pointerup", (event) => finishWidgetDrag(event, true), {
+  container.addEventListener("pointerdown", startWidgetResize, { signal: eventController.signal });
+  container.addEventListener("pointermove", (event) => {
+    moveWidgetDrag(event);
+    moveWidgetResize(event);
+  }, { signal: eventController.signal });
+  container.addEventListener("pointerup", (event) => {
+    finishWidgetDrag(event, true);
+    finishWidgetResize(event, true);
+  }, {
     signal: eventController.signal,
   });
-  container.addEventListener("pointercancel", (event) => finishWidgetDrag(event, false), {
+  container.addEventListener("pointercancel", (event) => {
+    finishWidgetDrag(event, false);
+    finishWidgetResize(event, false);
+  }, {
     signal: eventController.signal,
   });
+
+  container.addEventListener("keydown", (event) => {
+    const handle = event.target.closest('[data-action="widget-resize-handle"]');
+    if (!handle || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    resizeWidgetGroup(
+      handle.dataset.widgetGroup,
+      event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0,
+      event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0
+    );
+  }, { signal: eventController.signal });
 
   // Delegación de eventos: el contenido se re-renderiza con frecuencia.
   container.addEventListener("click", async (event) => {
@@ -1533,7 +1480,7 @@ export async function renderHomeView(container, apiBase) {
     const widget = widgetDraft.find((item) => item.widget_id === visibilityToggle.dataset.widgetId);
     if (!widget) return;
     widget.is_visible = visibilityToggle.checked;
-    normalizeWidgetDraftByZones();
+    normalizeWidgetDraftByOrder();
     widgetSaveState = "idle";
     widgetSaveError = "";
     widgetAnnouncement = `${widget.label}: ${widget.is_visible ? "visible" : "oculta"}.`;
@@ -1581,32 +1528,56 @@ export async function renderHomeView(container, apiBase) {
     if (card) card.focus();
   }
 
+  function focusWidgetResize(groupId) {
+    const handle = container.querySelector(
+      `[data-action="widget-resize-handle"][data-widget-group="${groupId}"]`
+    );
+    if (handle) handle.focus();
+  }
+
   function moveWidgetGroup(groupId, direction) {
     if (!widgetDraft || widgetSaveState === "saving" || !["up", "down"].includes(direction)) return;
     const card = container.querySelector(`.home-widget-card[data-widget-group="${groupId}"]`);
     if (!card) return;
-    const zone = card.dataset.widgetZone;
-    const cards = Array.from(card.parentElement.querySelectorAll(".home-widget-card"));
+    const cards = Array.from(homeGridEl.querySelectorAll(".home-widget-card"));
     const index = cards.indexOf(card);
     const target = cards[index + (direction === "up" ? -1 : 1)];
     if (!target) return;
-    if (direction === "up") card.parentElement.insertBefore(card, target);
-    else card.parentElement.insertBefore(target, card);
+    if (direction === "up") homeGridEl.insertBefore(card, target);
+    else homeGridEl.insertBefore(target, card);
     normalizeWidgetDraftFromDom();
-    const groups = visibleWidgetGroups(zone);
+    const groups = visibleWidgetGroups();
     const nextIndex = groups.findIndex((group) => group.id === groupId);
     const label = groups[nextIndex]?.label || groupId;
     widgetSaveState = "idle";
     widgetSaveError = "";
-    widgetAnnouncement = `${label} movido a la posición ${nextIndex + 1} de ${groups.length} en ${ZONE_LABELS[zone]}.`;
+    widgetAnnouncement = `${label} movido a la posición ${nextIndex + 1} de ${groups.length}.`;
     renderAll();
     focusWidgetGroup(groupId);
   }
 
+  function resizeWidgetGroup(groupId, columnDelta, rowDelta) {
+    if (!widgetDraft || widgetSaveState === "saving") return;
+    const group = widgetGroups(widgetDraft).find((item) => item.id === groupId);
+    if (!group) return;
+    const columnSpan = Math.max(2, Math.min(6, group.columnSpan + columnDelta));
+    const rowSpan = Math.max(1, Math.min(3, group.rowSpan + rowDelta));
+    if (columnSpan === group.columnSpan && rowSpan === group.rowSpan) return;
+    for (const widget of widgetDraft) {
+      if (group.widgetIds.includes(widget.widget_id)) {
+        widget.column_span = columnSpan;
+        widget.row_span = rowSpan;
+      }
+    }
+    widgetSaveState = "idle";
+    widgetSaveError = "";
+    widgetAnnouncement = `${group.label}: tamaño ${columnSpan} por ${rowSpan}.`;
+    renderAll();
+    focusWidgetResize(groupId);
+  }
+
   function clearDropHighlights() {
-    container.querySelectorAll(".home-drop-forbidden").forEach((zone) => {
-      zone.classList.remove("home-drop-forbidden");
-    });
+    homeGridEl.classList.remove("home-drop-forbidden");
     container.querySelectorAll(".home-widget-card--drop-target").forEach((card) => {
       card.classList.remove("home-widget-card--drop-target");
     });
@@ -1617,50 +1588,49 @@ export async function renderHomeView(container, apiBase) {
     if (!state || !state.started) return;
     clearDropHighlights();
     const pointed = document.elementFromPoint(event.clientX, event.clientY);
-    const targetZone = pointed && pointed.closest("[data-home-zone]");
-    if (!targetZone || targetZone !== state.source.parentElement) {
+    if (!pointed || !homeGridEl.contains(pointed)) {
       state.invalid = true;
-      if (targetZone) targetZone.classList.add("home-drop-forbidden");
-      announceWidget("No se puede soltar una sección en otra columna.");
+      homeGridEl.classList.add("home-drop-forbidden");
+      announceWidget("Suelta la sección dentro de la cuadrícula.");
       return;
     }
 
     state.invalid = false;
     const targetCard = pointed.closest(".home-widget-card");
-    if (targetCard) {
+    if (targetCard && targetCard !== state.source) {
       targetCard.classList.add("home-widget-card--drop-target");
       const rect = targetCard.getBoundingClientRect();
-      const before = event.clientY < rect.top + rect.height / 2;
-      targetZone.insertBefore(state.placeholder, before ? targetCard : targetCard.nextSibling);
+      const verticalMidpoint = rect.top + rect.height / 2;
+      const before = event.clientY < verticalMidpoint
+        || (event.clientY < rect.bottom && event.clientX < rect.left + rect.width / 2);
+      homeGridEl.insertBefore(state.placeholder, before ? targetCard : targetCard.nextSibling);
     } else {
-      targetZone.appendChild(state.placeholder);
+      homeGridEl.appendChild(state.placeholder);
     }
-    announceWidget("Suelta la sección en esta columna para cambiar su posición.");
+    announceWidget("Suelta la sección para cambiar su posición.");
   }
 
   function startWidgetDrag(event) {
     const handle = event.target.closest('[data-action="widget-drag-handle"]');
-    if (!handle || !customizingWidgets || widgetSaveState === "saving" || event.button !== 0) return;
+    if (!handle || handle.disabled || !customizingWidgets || widgetSaveState === "saving" || event.button !== 0) return;
     const source = handle.closest(".home-widget-card");
     if (!source) return;
-    const zone = source.dataset.widgetZone;
-    if (visibleWidgetGroups(zone).length < 2) return;
     const placeholder = document.createElement("div");
     placeholder.className = "home-widget-drop-placeholder";
     placeholder.setAttribute("aria-hidden", "true");
     placeholder.textContent = "Soltar aquí";
-    placeholder.style.height = `${source.getBoundingClientRect().height}px`;
+    placeholder.dataset.columnSpan = source.dataset.columnSpan;
+    placeholder.dataset.rowSpan = source.dataset.rowSpan;
     dragState = {
       handle,
       pointerId: event.pointerId,
       source,
-      zone,
       placeholder,
       startX: event.clientX,
       startY: event.clientY,
       started: false,
       invalid: false,
-      initialOrder: Array.from(source.parentElement.querySelectorAll(".home-widget-card"))
+      initialOrder: Array.from(homeGridEl.querySelectorAll(".home-widget-card"))
         .map((card) => card.dataset.widgetGroup),
     };
     handle.setPointerCapture(event.pointerId);
@@ -1675,8 +1645,8 @@ export async function renderHomeView(container, apiBase) {
       if (distance < 5) return;
       state.started = true;
       state.source.classList.add("home-widget-card--dragging");
-      state.source.parentElement.insertBefore(state.placeholder, state.source);
-      const group = visibleWidgetGroups(state.zone).find(
+      homeGridEl.insertBefore(state.placeholder, state.source);
+      const group = visibleWidgetGroups().find(
         (item) => item.id === state.source.dataset.widgetGroup
       );
       announceWidget(`Arrastrando ${group ? group.label : "sección"}.`);
@@ -1691,6 +1661,7 @@ export async function renderHomeView(container, apiBase) {
   function finishWidgetDrag(event, commit) {
     const state = dragState;
     if (!state || state.pointerId !== event.pointerId) return;
+    if (commit && state.started) updateDragTarget(event);
     dragState = null;
     clearDropHighlights();
     state.source.classList.remove("home-widget-card--dragging");
@@ -1699,29 +1670,121 @@ export async function renderHomeView(container, apiBase) {
     }
     if (!state.started) return;
 
-    const validDrop = commit && !state.invalid && state.placeholder.parentElement === state.source.parentElement;
+    const releaseTarget = document.elementFromPoint(event.clientX, event.clientY);
+    const validDrop = commit
+      && !state.invalid
+      && homeGridEl.contains(releaseTarget)
+      && state.placeholder.parentElement === homeGridEl;
     if (!validDrop) {
       state.placeholder.remove();
       announceWidget("Movimiento cancelado. La sección conserva su posición.");
       return;
     }
-    state.placeholder.parentElement.insertBefore(state.source, state.placeholder);
+    homeGridEl.insertBefore(state.source, state.placeholder);
     state.placeholder.remove();
-    const nextOrder = Array.from(state.source.parentElement.querySelectorAll(".home-widget-card"))
+    const nextOrder = Array.from(homeGridEl.querySelectorAll(".home-widget-card"))
       .map((card) => card.dataset.widgetGroup);
     if (nextOrder.join("|") === state.initialOrder.join("|")) {
       announceWidget("La sección conserva su posición.");
       return;
     }
     normalizeWidgetDraftFromDom();
-    const groups = visibleWidgetGroups(state.zone);
+    const groups = visibleWidgetGroups();
     const index = groups.findIndex((group) => group.id === state.source.dataset.widgetGroup);
     const group = groups[index];
     widgetSaveState = "idle";
     widgetSaveError = "";
-    widgetAnnouncement = `${group.label} movido a la posición ${index + 1} de ${groups.length} en ${ZONE_LABELS[state.zone]}.`;
+    widgetAnnouncement = `${group.label} movido a la posición ${index + 1} de ${groups.length}.`;
     renderAll();
     focusWidgetGroup(group.id);
+  }
+
+  function gridMetrics() {
+    const styles = getComputedStyle(homeGridEl);
+    const columns = styles.gridTemplateColumns.split(" ").length;
+    const gap = Number.parseFloat(styles.columnGap) || 0;
+    const cellWidth = (homeGridEl.clientWidth - gap * (columns - 1)) / columns + gap;
+    const rowHeight = Number.parseFloat(styles.gridAutoRows) || 112;
+    const rowStep = rowHeight + (Number.parseFloat(styles.rowGap) || gap);
+    return { cellWidth, rowStep };
+  }
+
+  function startWidgetResize(event) {
+    const handle = event.target.closest('[data-action="widget-resize-handle"]');
+    if (!handle || handle.disabled || !customizingWidgets || widgetSaveState === "saving" || event.button !== 0) return;
+    const source = handle.closest(".home-widget-card");
+    if (!source) return;
+    const metrics = gridMetrics();
+    resizeState = {
+      handle,
+      pointerId: event.pointerId,
+      source,
+      groupId: source.dataset.widgetGroup,
+      startX: event.clientX,
+      startY: event.clientY,
+      startColumnSpan: Number(source.dataset.columnSpan),
+      startRowSpan: Number(source.dataset.rowSpan),
+      cellWidth: metrics.cellWidth,
+      rowStep: metrics.rowStep,
+      started: false,
+    };
+    handle.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveWidgetResize(event) {
+    const state = resizeState;
+    if (!state || state.pointerId !== event.pointerId) return;
+    const columnDelta = Math.round((event.clientX - state.startX) / state.cellWidth);
+    const rowDelta = Math.round((event.clientY - state.startY) / state.rowStep);
+    const columnSpan = Math.max(2, Math.min(6, state.startColumnSpan + columnDelta));
+    const rowSpan = Math.max(1, Math.min(3, state.startRowSpan + rowDelta));
+    if (columnSpan === Number(state.source.dataset.columnSpan)
+      && rowSpan === Number(state.source.dataset.rowSpan)) return;
+    state.started = true;
+    state.source.classList.add("home-widget-card--resizing");
+    for (const widget of widgetDraft || []) {
+      if (state.source.dataset.widgetIds.split(" ").includes(widget.widget_id)) {
+        widget.column_span = columnSpan;
+        widget.row_span = rowSpan;
+      }
+    }
+    state.source.dataset.columnSpan = String(columnSpan);
+    state.source.dataset.rowSpan = String(rowSpan);
+    widgetSaveState = "idle";
+    widgetSaveError = "";
+    const group = widgetGroups(widgetDraft).find((item) => item.id === state.groupId);
+    widgetAnnouncement = `${group?.label || "Sección"}: tamaño ${columnSpan} por ${rowSpan}.`;
+    renderCustomizePanel();
+    announceWidget(widgetAnnouncement);
+    event.preventDefault();
+  }
+
+  function finishWidgetResize(event, commit) {
+    const state = resizeState;
+    if (!state || state.pointerId !== event.pointerId) return;
+    resizeState = null;
+    state.source.classList.remove("home-widget-card--resizing");
+    if (state.handle.hasPointerCapture(state.pointerId)) {
+      state.handle.releasePointerCapture(state.pointerId);
+    }
+    if (!state.started) return;
+    if (!commit) {
+      for (const widget of widgetDraft || []) {
+        if (state.source.dataset.widgetIds.split(" ").includes(widget.widget_id)) {
+          widget.column_span = state.startColumnSpan;
+          widget.row_span = state.startRowSpan;
+        }
+      }
+      renderAll();
+      focusWidgetResize(state.groupId);
+      announceWidget("Cambio de tamaño cancelado.");
+      return;
+    }
+    const group = widgetGroups(widgetDraft).find((item) => item.id === state.groupId);
+    widgetAnnouncement = `${group.label}: tamaño ${group.columnSpan} por ${group.rowSpan}.`;
+    renderAll();
+    focusWidgetResize(state.groupId);
   }
 
   async function saveWidgetPreferences(exitAfterSave = false) {
@@ -1731,7 +1794,7 @@ export async function renderHomeView(container, apiBase) {
       else announceWidget("No hay cambios pendientes.");
       return;
     }
-    normalizeWidgetDraftByZones();
+    normalizeWidgetDraftByOrder();
     widgetSaveState = "saving";
     widgetSaveError = "";
     widgetAnnouncement = "Guardando preferencias.";
@@ -1740,10 +1803,18 @@ export async function renderHomeView(container, apiBase) {
       const res = await fetch(`${apiBase}/dashboard/widgets`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(widgetDraft.map(({ widget_id, is_visible, position }) => ({
+        body: JSON.stringify(widgetDraft.map(({
           widget_id,
           is_visible,
           position,
+          column_span,
+          row_span,
+        }) => ({
+          widget_id,
+          is_visible,
+          position,
+          column_span,
+          row_span,
         }))),
       });
       const saved = await res.json();

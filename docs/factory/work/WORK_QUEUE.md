@@ -62,6 +62,12 @@ Se habilita cuando las cuatro entregas anteriores estén en REVIEW. Solo lectura
 **Decisiones expresamente fuera de alcance:** mover widgets entre main/side/full; migrar o extender widget_preferences; cambiar config_json; cambiar el token global --text-muted; cambiar el comportamiento del tema “Sistema”; añadir librerías/frameworks/endpoints; reconstruir Home o el shell completo.
 
 
+## Fase 9.2 — Distribución flexible de widgets
+
+### UX-WIDGETS-003 — Grid redimensionable de Home
+Prioridad P1 · Developer Mimo · **Estado: REVIEW** (2026-11-22; QA propia, pendiente revisión independiente y aceptación del PO) · Depende de UX-WIDGETS-002 · Spec: UX-WIDGETS-003/SPEC.md · ADR-003.
+Home reemplaza las zonas fijas por un grid responsive con orden y spans persistidos. Incluye drag, resize, alternativas de teclado, migración de `widget_preferences` y actualización de exportación. Projects y Notes no se modifican. Sin dependencias nuevas. QA propia: pytest completo, Ruff en archivos backend afectados, `node --check`, migración temporal desde 0005 con downgrade/re-upgrade, persistencia tras reload, Cancel, drag/resize con mouse y touch emulados, resize por teclado, captura interna y matriz clara/oscura en 1440×900, 768×1024 y 390×844 sin overflow; asas verificadas ≥44×44 CSS px. La validación en dispositivo táctil físico queda pendiente de revisión independiente. Handoff: UX-WIDGETS-003/HANDOFF.md. No aceptar como DONE hasta revisión independiente y PO.
+
 ## Revisión
 ### UX-REVIEW-001
 Reviewer Mimo · Después de HOME-001 y TASK-001. **Estado: REVIEW** (2026-11-21) — revisión de UX de Home y Tareas con auditoría objetiva (contraste calculado en el navegador, foco con teclado real, roles y nombres accesibles, trampa de foco del modal, estados y responsive en 3 viewports y 2 temas). Veredicto: **APROBADO CON CORRECCIONES APLICADAS** — 0 ALTA, 4 MEDIA (contraste AA, trampa de foco, restauración de foco y fuga del listener ESC en el modal de widgets) y 3 BAJA, todas corregidas y verificadas (0 fallos de contraste, 0 salidas del modal). Queda 1 pendiente de decisión del PO (token global `--text-muted`). **Nota:** la revisión la realizó el mismo agente que implementó HOME-001 y TASK-001 (reasignación del PO), por lo que es QA propia, no revisión independiente: sigue pendiente el contraste de Nemo. Informe: `docs/factory/work/UX-REVIEW-001/REVIEW.md`.

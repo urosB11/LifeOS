@@ -47,9 +47,9 @@ Entregar una aplicación web local, responsive y de un solo usuario que permita 
 
 **FR-HOME-03 — Visibilidad.** El usuario puede mostrar u ocultar cualquiera de los widgets disponibles.
 
-**FR-HOME-04 — Orden.** El usuario puede reordenar los widgets desde Home mediante un modo explícito de personalización. El arrastre desde un asa es una forma directa de hacerlo; debe existir una alternativa accesible de mover arriba/abajo que funcione con teclado y táctil. En la primera entrega el movimiento se limita a la zona funcional actual de cada widget: no se permite trasladarlos entre columnas o zonas. El orden y la visibilidad se conservan al reiniciar la aplicación.
+**FR-HOME-04 — Orden y distribución.** El usuario puede reordenar y redimensionar los widgets desde Home mediante un modo explícito de personalización. El arrastre y el ajuste desde asas dedicadas tienen alternativas accesibles por teclado y táctil. Un grid responsive evita solapamientos; el orden y las dimensiones lógicas se conservan al reiniciar la aplicación.
 
-**FR-HOME-05 — Persistencia.** La visibilidad y el orden se conservan después de cerrar y reiniciar la aplicación.
+**FR-HOME-05 — Persistencia.** La visibilidad, el orden y el tamaño de los widgets se conservan después de cerrar y reiniciar la aplicación.
 
 **FR-HOME-06 — Fuente única.** Los widgets leen los datos de los módulos correspondientes; no mantienen copias operativas propias.
 

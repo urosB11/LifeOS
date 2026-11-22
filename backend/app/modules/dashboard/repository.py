@@ -22,12 +22,19 @@ class WidgetPreferenceRepository:
         return list(self.db.execute(stmt).scalars().all())
 
     def upsert(
-        self, widget_id: str, is_visible: bool, position: int
+        self,
+        widget_id: str,
+        is_visible: bool,
+        position: int,
+        column_span: int,
+        row_span: int,
     ) -> WidgetPreference:
         existing = self.get(widget_id)
         if existing:
             existing.is_visible = is_visible
             existing.position = position
+            existing.column_span = column_span
+            existing.row_span = row_span
             from app.core.utils import utc_now
 
             existing.updated_at = utc_now()
@@ -39,6 +46,8 @@ class WidgetPreferenceRepository:
             widget_id=widget_id,
             is_visible=is_visible,
             position=position,
+            column_span=column_span,
+            row_span=row_span,
         )
         self.db.add(db_obj)
         self.db.flush()

@@ -11,8 +11,9 @@ ENV = {**os.environ, "LIFEOS_DATA_DIR": DATA_DIR}
 DB_PATH = os.path.join(DATA_DIR, "lifeos.db")
 ALEMBIC = os.path.join(os.path.dirname(sys.executable), "alembic.exe")
 
-HEAD = "0005_habits"
-PREV = "0004_widget_boolean"
+HEAD = "0006_home_widget_grid"
+PREV_WIDGETS = "0005_habits"
+PREV_HABITS = "0004_widget_boolean"
 
 BASE_TABLES = {
     "activity_events",
@@ -148,11 +149,96 @@ print(f"OK base vacía → head: {len(got)} tablas")
 check_integrity("base vacía")
 check_version(HEAD)
 
-# 2. Datos sintéticos (incluye hábitos y sus restricciones)
+# 2. Simular preferencias existentes bajo el esquema 0005 y migrarlas.
+run("downgrade", PREV_WIDGETS)
+check_version(PREV_WIDGETS)
+
+# 3. Datos sintéticos (incluye hábitos y sus restricciones)
 insert_sample_data()
 
-# 3. Downgrade a 0004 (versión previa real) y re-upgrade a head
-run("downgrade", PREV)
+conn = db()
+conn.executemany(
+    "INSERT INTO widget_preferences "
+    "(widget_id, is_visible, position, config_json, updated_at) "
+    "VALUES (?, ?, ?, NULL, '2026-01-01T00:00:00Z')",
+    [
+        ("upcoming_tasks", 1, 0),
+        ("active_projects", 0, 1),
+        ("quick_add_task", 1, 2),
+        ("quick_add_note", 0, 3),
+        ("habits_today", 1, 4),
+        ("habits_week", 1, 5),
+    ],
+)
+conn.commit()
+conn.close()
+print("OK preferencias de widgets de 0005 insertadas")
+
+run("upgrade", "head")
+conn = db()
+try:
+    rows = conn.execute(
+        "SELECT widget_id, is_visible, position, column_span, row_span "
+        "FROM widget_preferences"
+    ).fetchall()
+    positions = {row[0]: row[2] for row in rows}
+    assert positions == {
+        "upcoming_tasks": 0,
+        "quick_add_task": 1,
+        "quick_add_note": 1,
+        "active_projects": 2,
+        "habits_today": 3,
+        "habits_week": 4,
+    }, f"Orden migrado inesperado: {positions}"
+    preferences = {row[0]: row[1:] for row in rows}
+    assert preferences["active_projects"][0] == 0, "Visibilidad alterada"
+    assert preferences["upcoming_tasks"][2:] == (4, 1), "Spans de tareas incorrectos"
+    assert preferences["habits_week"][2:] == (6, 1), "Spans de semana incorrectos"
+finally:
+    conn.close()
+print("OK 0005→0006: orden por zonas, visibilidad y spans preservados")
+check_integrity("migración de preferencias de widgets")
+check_version(HEAD)
+
+# 4. Downgrade a 0005 conserva un orden determinista para captura rápida
+run("downgrade", PREV_WIDGETS)
+conn = db()
+try:
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(widget_preferences)")
+    }
+    assert "column_span" not in columns and "row_span" not in columns
+    legacy_positions = dict(
+        conn.execute(
+            "SELECT widget_id, position FROM widget_preferences"
+        ).fetchall()
+    )
+    assert (
+        legacy_positions["quick_add_task"] < legacy_positions["quick_add_note"]
+    ), f"Orden de captura rápida no determinista: {legacy_positions}"
+finally:
+    conn.close()
+check_version(PREV_WIDGETS)
+print("OK downgrade a 0005: columnas de spans eliminadas y captura en orden")
+
+run("upgrade", "head")
+conn = db()
+try:
+    upgraded_spans = {
+        row[0]: row[1:]
+        for row in conn.execute(
+            "SELECT widget_id, column_span, row_span FROM widget_preferences"
+        ).fetchall()
+    }
+    assert upgraded_spans["quick_add_task"] == (2, 1)
+    assert upgraded_spans["quick_add_note"] == (2, 1)
+finally:
+    conn.close()
+check_version(HEAD)
+print("OK re-upgrade a 0006: captura rápida recupera sus spans")
+
+# 5. Downgrade a 0004 (versión previa real) y re-upgrade a head
+run("downgrade", PREV_HABITS)
 conn = db()
 try:
     remaining = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -161,7 +247,7 @@ try:
 finally:
     conn.close()
 check_integrity("tras downgrade a 0004")
-check_version(PREV)
+check_version(PREV_HABITS)
 print("OK downgrade a 0004_widget_boolean: tablas de hábitos eliminadas, 0004 intacta")
 
 run("upgrade", "head")
@@ -178,7 +264,7 @@ check_integrity("re-upgrade desde 0004")
 check_version(HEAD)
 print("OK upgrade desde 0004 a head: datos 0004 intactos y tablas de hábitos creadas")
 
-# 4. Downgrade a 0001 (versión histórica de prueba) y re-upgrade
+# 6. Downgrade a 0001 (versión histórica de prueba) y re-upgrade
 run("downgrade", "0001_initial_schema")
 conn = db()
 try:

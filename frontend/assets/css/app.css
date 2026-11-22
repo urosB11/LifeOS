@@ -461,25 +461,16 @@ body {
   font-size: 0.9375rem;
 }
 
-/* --- Home como centro de operaciones (HOME-001) -------------------------- *
- * Reutiliza los tokens y componentes compartidos (.widget-card, .progress,
- * .badge, .empty-state). La jerarquía es: Attention > Hoy > Proyectos en
- * marcha en la columna amplia; Hábitos y Captura rápida en la secundaria. */
+/* --- Home como centro de operaciones (HOME-001) -------------------------- */
 .home-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.9fr) minmax(300px, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: minmax(112px, auto);
   gap: var(--spacing-lg);
-  align-items: start;
+  align-items: stretch;
 }
 
-.home-col {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-lg);
-  min-width: 0;
-}
-
-.home-col--full {
+.home-layout > .widget-card:not(.home-widget-card) {
   grid-column: 1 / -1;
 }
 
@@ -1026,6 +1017,21 @@ body {
   min-width: 0;
 }
 
+.home-widget-card[data-column-span="2"],
+.home-widget-drop-placeholder[data-column-span="2"] { grid-column: span 2; }
+.home-widget-card[data-column-span="3"],
+.home-widget-drop-placeholder[data-column-span="3"] { grid-column: span 3; }
+.home-widget-card[data-column-span="4"],
+.home-widget-drop-placeholder[data-column-span="4"] { grid-column: span 4; }
+.home-widget-card[data-column-span="5"],
+.home-widget-drop-placeholder[data-column-span="5"] { grid-column: span 5; }
+.home-widget-card[data-column-span="6"],
+.home-widget-drop-placeholder[data-column-span="6"] { grid-column: span 6; }
+.home-widget-card[data-row-span="2"],
+.home-widget-drop-placeholder[data-row-span="2"] { grid-row: span 2; }
+.home-widget-card[data-row-span="3"],
+.home-widget-drop-placeholder[data-row-span="3"] { grid-row: span 3; }
+
 .home-widget-editor {
   display: flex;
   align-items: center;
@@ -1035,7 +1041,8 @@ body {
 }
 
 .home-widget-handle,
-.home-widget-move {
+.home-widget-move,
+.home-widget-resize {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1048,12 +1055,18 @@ body {
   border-radius: var(--radius);
   background: var(--surface-hover);
   color: var(--text);
+  font: inherit;
 }
 
 .home-widget-handle {
   cursor: grab;
   touch-action: none;
   user-select: none;
+}
+
+.home-widget-handle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .home-widget-handle:active {
@@ -1067,9 +1080,21 @@ body {
 
 .home-widget-move {
   padding: 0;
-  font: inherit;
   font-size: 1.125rem;
   cursor: pointer;
+}
+
+.home-widget-resize {
+  padding: 0;
+  font-size: 1.125rem;
+  cursor: nwse-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.home-widget-resize:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .home-widget-move:disabled {
@@ -1097,9 +1122,13 @@ body {
   border-color: var(--accent);
 }
 
+.home-widget-card--resizing {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .home-drop-forbidden {
-  outline: 2px solid var(--danger);
-  outline-offset: 4px;
+  background: var(--danger-subtle);
 }
 
 /* --- Formularios progresivos y edición de Notas (UX-MODULES-002) -------- */
@@ -1945,18 +1974,49 @@ button.wk-cell {
   }
 }
 
-/* Home: una sola columna en tablet y móvil (HOME-001). */
+/* Grid de Home: cuatro columnas en tablet y una en móvil. */
 @media (max-width: 1023px) {
   .home-layout {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .home-col--full {
-    grid-column: auto;
+  .home-widget-card[data-column-span="5"],
+  .home-widget-card[data-column-span="6"],
+  .home-widget-drop-placeholder[data-column-span="5"],
+  .home-widget-drop-placeholder[data-column-span="6"] {
+    grid-column: span 4;
+  }
+
+  .home-widget-card,
+  .home-widget-drop-placeholder {
+    grid-row: span 1;
+  }
+
+  .home-widget-card[data-row-span],
+  .home-widget-drop-placeholder[data-row-span] {
+    grid-row: span 1;
+  }
+
+  .home-layout > .widget-card:not(.home-widget-card) {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 560px) {
+  .home-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-widget-card,
+  .home-widget-drop-placeholder {
+    grid-column: span 1;
+  }
+
+  .home-widget-card[data-column-span],
+  .home-widget-drop-placeholder[data-column-span] {
+    grid-column: 1 / -1;
+  }
+
   .home-customize-panel__footer {
     align-items: stretch;
     flex-direction: column;

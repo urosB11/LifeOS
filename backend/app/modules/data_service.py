@@ -22,7 +22,7 @@ from app.modules.notes.models import Note, NoteProjectLink, NoteTag, NoteTaskLin
 from app.modules.projects.models import Project
 from app.modules.tasks.models import Task
 
-EXPORT_FORMAT_VERSION = 1
+EXPORT_FORMAT_VERSION = 2
 
 
 def _row_dict(row) -> dict[str, Any]:
