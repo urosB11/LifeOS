@@ -145,19 +145,38 @@ node %TEMP%\opencode\mind-qa\qa-mind.mjs              → 12 capturas + interacc
 - La rama `product/mind-core` se creó desde `origin/product/lifeos-evolution` (`3362502`)
   y quedó con upstream apuntando a esa rama remota: **publicar con
   `git push -u origin product/mind-core`** para no escribir en Evolution.
-- Durante la implementación, `origin/product/lifeos-evolution` avanzó 4 commits
-  (`a3b5a08`: home, notas, formularios progresivos y responsive). **Ninguno de esos
-  commits toca los archivos modificados por MIND-002** (`main.py`, `data_service.py`,
-  `verify_migrations.py`, `frontend/index.html`, `frontend/assets/js/app.js`,
-  `DATABASE.md`), por lo que la sincronización posterior de la rama no debería
-  generar conflictos. La base acordada de esta entrega se mantuvo en `3362502`.
+- Durante la implementación, `origin/product/lifeos-evolution` avanzó 5 commits
+  (`a3b5a08` y `18e1d3c`: home, notas, formularios progresivos, responsive y grid de
+  widgets). La base acordada de esta entrega se mantuvo en `3362502`.
 - El worktree de Evolution (`LifeOS`) conserva trabajo sin publicar ajeno
-  (`home.js`, `app.css`, `contexto_lifeos.txt`, `UX-01/02/03`): no se tocó.
+  (`contexto_lifeos.txt`, `UX-01/02/03`): no se tocó.
 - El esquema de Mind ya está en `0006_mind`; las siguientes tareas de Mind deben
   encadenar su migración sobre `down_revision = "0006_mind"`.
 - Los endpoints `POST /mind/canvases/{id}/nodes` (representar una Note existente) y
   `GET/PATCH /mind/spaces` ya existen para MIND-003, pero **la UI todavía no ofrece
   mover notas entre Canvases ni arrastrar desde el Inbox**.
+
+## Riesgos de integración con `product/lifeos-evolution` (sin resolver)
+
+Estos puntos aparecen porque Evolution avanzó durante el trabajo. **No se tocaron**:
+resolverlos implica decidir la estrategia de merge, que corresponde al PO.
+
+1. **Colisión de cabeza de Alembic (bloqueante).** Evolution creó
+   `0006_home_widget_grid` con `down_revision = "0005_habits"`; Mind creó
+   `0006_mind` con el mismo `down_revision`. Al integrar ambas ramas Alembic verá
+   **dos cabezas**. Hace falta renumerar una de las dos migraciones (por ejemplo,
+   `0007_mind` sobre `0006_home_widget_grid`) o añadir una revisión de merge.
+2. **Versión del formato de exportación.** En esta rama el JSON mantiene
+   `EXPORT_FORMAT_VERSION = 1` porque las 4 tablas de Mind son aditivas; Evolution
+   subió a `2` por los `column_span`/`row_span` de widgets. Tras integrar, la forma
+   exportada incluye ambos cambios: corresponde usar `2` (la decisión de Evolution)
+   y documentar que la v2 incluye además las tablas de Mind.
+3. **`verify_migrations.py` y `DATABASE.md`.** Ambas ramas los modificaron
+   (`verify_migrations.py` fija el HEAD esperado y la lista de tablas;
+   `DATABASE.md` documenta el esquema). El merge exige reconciliarlos a mano:
+   el HEAD debe ser el que resulte de la renumeración del punto 1 y el documento
+   debe describir tanto el grid de widgets como las tablas de Mind.
+
 
 ## Estado de la cola de trabajo
 
