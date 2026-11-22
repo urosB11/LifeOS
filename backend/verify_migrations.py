@@ -149,7 +149,32 @@ print(f"OK base vacía → head: {len(got)} tablas")
 check_integrity("base vacía")
 check_version(HEAD)
 
-# 2. Simular preferencias existentes bajo el esquema 0005 y migrarlas.
+# 2. Un esquema 0005 sin preferencias también debe migrar sin crear filas.
+run("downgrade", PREV_WIDGETS)
+check_version(PREV_WIDGETS)
+conn = db()
+try:
+    assert conn.execute("SELECT COUNT(*) FROM widget_preferences").fetchone()[0] == 0
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(widget_preferences)")
+    }
+    assert "column_span" not in columns and "row_span" not in columns
+finally:
+    conn.close()
+
+run("upgrade", "head")
+conn = db()
+try:
+    assert conn.execute("SELECT COUNT(*) FROM widget_preferences").fetchone()[0] == 0
+    columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(widget_preferences)")
+    }
+    assert "column_span" in columns and "row_span" in columns
+finally:
+    conn.close()
+check_version(HEAD)
+print("OK 0005 sin preferencias → 0006: catálogo sin filas guardadas")
+
 run("downgrade", PREV_WIDGETS)
 check_version(PREV_WIDGETS)
 

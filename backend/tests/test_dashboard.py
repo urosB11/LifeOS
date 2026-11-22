@@ -1,10 +1,11 @@
 """Pruebas de API e integración para Dashboard y configuración."""
 
+from app.modules.dashboard.models import WidgetPreference
 
 
-
-def test_list_widgets_defaults(client):
+def test_list_widgets_defaults(client, db):
     """El catálogo debe devolver los widgets del MVP (Fase 6 + 7) con defaults."""
+    assert db.query(WidgetPreference).count() == 0
     response = client.get("/api/v1/dashboard/widgets")
     assert response.status_code == 200
     data = response.json()
