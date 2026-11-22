@@ -903,6 +903,205 @@ body {
   color: var(--text-secondary);
 }
 
+.home-customize-panel {
+  margin-bottom: var(--spacing-lg);
+  padding: clamp(16px, 2vw, 24px);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.home-customize-panel__intro {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.home-customize-panel__intro h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.home-customize-panel__intro p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.home-customize-visibility {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.home-customize-visibility legend {
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.home-customize-visibility__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 8px;
+}
+
+.home-customize-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.home-customize-toggle input {
+  grid-row: span 2;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.home-customize-toggle__name {
+  min-width: 0;
+  font-weight: 500;
+}
+
+.home-customize-toggle__zone,
+.home-customize-toggle__state {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.home-customize-toggle__state {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.home-customize-panel__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.home-customize-panel__messages {
+  min-width: 0;
+}
+
+.home-customize-error,
+.home-customize-status {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.home-customize-error {
+  color: var(--danger);
+}
+
+.home-customize-panel__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.home-customize-panel__actions .btn,
+.section-header #widgets-edit-btn {
+  min-height: 44px;
+}
+
+.home-widget-card {
+  min-width: 0;
+}
+
+.home-widget-editor {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -8px -8px 8px;
+}
+
+.home-widget-handle,
+.home-widget-move {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.home-widget-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.home-widget-handle:active {
+  cursor: grabbing;
+}
+
+.home-widget-editor__moves {
+  display: flex;
+  gap: 4px;
+}
+
+.home-widget-move {
+  padding: 0;
+  font: inherit;
+  font-size: 1.125rem;
+  cursor: pointer;
+}
+
+.home-widget-move:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.home-widget-drop-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.home-widget-card--dragging {
+  opacity: 0.4;
+}
+
+.home-widget-card--drop-target {
+  border-color: var(--accent);
+}
+
+.home-drop-forbidden {
+  outline: 2px solid var(--danger);
+  outline-offset: 4px;
+}
+
 /* --- Espacio de trabajo de Tareas (TASK-001) ----------------------------- *
  * Acción compacta (panel desplegable), contadores y filas escaneables.
  * Reutiliza .chip, .check-toggle, .badge y .btn ya definidos arriba. */
@@ -1089,29 +1288,6 @@ body {
 
 /* --- Tema oscuro: los tokens viven en vars.css (Fase 8A) --- */
 /* Los tokens se resuelven automáticamente; no se necesitan overrides aquí. */
-
-/* --- Configuración --- */
-.widget-config-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.widget-config-row label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  cursor: pointer;
-  flex: 1;
-}
-
-.widget-config-controls {
-  display: flex;
-  gap: 6px;
-}
 
 /* --- Hábitos (Fase 7) --- */
 .sr-only {
@@ -1720,6 +1896,21 @@ button.wk-cell {
 
   .home-col--full {
     grid-column: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .home-customize-panel__footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .home-customize-panel__actions {
+    width: 100%;
+  }
+
+  .home-customize-panel__actions .btn {
+    flex: 1;
   }
 }
 

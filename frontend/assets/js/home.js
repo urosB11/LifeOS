@@ -35,6 +35,14 @@ const WIDGET_ROLES = {
   habits_week: "full",
 };
 
+const WIDGET_ZONES = ["main", "side", "full"];
+const CAPTURE_WIDGET_IDS = ["quick_add_task", "quick_add_note"];
+const ZONE_LABELS = {
+  main: "columna principal",
+  side: "columna secundaria",
+  full: "ancho completo",
+};
+
 const MAX_ATTENTION = 5;
 const MAX_TODAY = 8;
 const MAX_PROJECTS = 6;
@@ -50,12 +58,12 @@ const RELEVANT_WINDOW_DAYS = 7;
 // (UX-01 §5) y el aviso ofrece reintento. No sustituye las preferencias
 // reales: mientras falle, guardar preferencias queda bloqueado.
 const DEFAULT_WIDGETS = [
-  { widget_id: "upcoming_tasks", label: "Tareas pr&oacute;ximas", is_visible: true, position: 0 },
+  { widget_id: "upcoming_tasks", label: "Tareas próximas", is_visible: true, position: 0 },
   { widget_id: "active_projects", label: "Proyectos activos", is_visible: true, position: 1 },
   { widget_id: "quick_add_task", label: "Nueva tarea", is_visible: true, position: 2 },
   { widget_id: "quick_add_note", label: "Nueva nota", is_visible: true, position: 3 },
-  { widget_id: "habits_today", label: "H&aacute;bitos de hoy", is_visible: true, position: 4 },
-  { widget_id: "habits_week", label: "Semana de h&aacute;bitos", is_visible: true, position: 5 },
+  { widget_id: "habits_today", label: "Hábitos de hoy", is_visible: true, position: 4 },
+  { widget_id: "habits_week", label: "Semana de hábitos", is_visible: true, position: 5 },
 ];
 
 // Mismo default que app/core/clock.py (DEFAULT_TIMEZONE): si la zona
@@ -74,12 +82,12 @@ export async function renderHomeView(container, apiBase) {
         <p class="subtitle" id="home-date">&nbsp;</p>
         <p class="home-context" id="home-context" aria-live="polite"></p>
       </div>
-      <button class="btn btn--secondary" id="widgets-edit-btn">
+      <button class="btn btn--secondary" id="widgets-edit-btn" aria-pressed="false">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;" aria-hidden="true" focusable="false">
           <circle cx="8" cy="8" r="2"/>
           <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.3 3.3l1.4 1.4M11.3 11.3l1.4 1.4M12.7 3.3l-1.4 1.4M4.7 11.3l-1.4 1.4"/>
         </svg>
-        Personalizar
+        <span id="widgets-edit-label">Personalizar</span>
       </button>
     </div>
 
@@ -88,10 +96,12 @@ export async function renderHomeView(container, apiBase) {
       <button class="btn btn--secondary btn--sm" data-action="retry-widgets">Reintentar</button>
     </div>
 
+    <div id="home-customize-panel"></div>
+
     <div class="home-layout">
-      <div class="home-col home-col--main" id="home-main"></div>
-      <div class="home-col home-col--side" id="home-side"></div>
-      <div class="home-col home-col--full" id="home-full"></div>
+      <div class="home-col home-col--main" id="home-main" data-home-zone="main"></div>
+      <div class="home-col home-col--side" id="home-side" data-home-zone="side"></div>
+      <div class="home-col home-col--full" id="home-full" data-home-zone="full"></div>
     </div>
   `;
 
@@ -101,8 +111,12 @@ export async function renderHomeView(container, apiBase) {
   const sideEl = container.querySelector("#home-side");
   const fullEl = container.querySelector("#home-full");
   const editBtn = container.querySelector("#widgets-edit-btn");
+  const editLabel = container.querySelector("#widgets-edit-label");
+  const customizePanel = container.querySelector("#home-customize-panel");
+  editBtn.disabled = true;
 
   let widgets = [];
+  let widgetsLoading = true;
   // true mientras GET /dashboard/widgets falle: se usan DEFAULT_WIDGETS y
   // se anuncia el fallo con reintento; guardar preferencias queda bloqueado
   // para no sobrescribir las preferencias reales con los defaults.
@@ -124,6 +138,12 @@ export async function renderHomeView(container, apiBase) {
   let captureMode = "task";
   const captureErrors = { task: "", note: "" };
   const capturePending = { task: false, note: false };
+  let customizingWidgets = false;
+  let widgetDraft = null;
+  let widgetSaveState = "idle";
+  let widgetSaveError = "";
+  let widgetAnnouncement = "";
+  let dragState = null;
 
   // --- Utilidades -----------------------------------------------------------
   function todayISO() {
@@ -227,6 +247,7 @@ export async function renderHomeView(container, apiBase) {
   };
 
   async function loadWidgets() {
+    widgetsLoading = true;
     try {
       const res = await fetch(`${apiBase}/dashboard/widgets`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -237,6 +258,8 @@ export async function renderHomeView(container, apiBase) {
       // (UX-01 §5) y el aviso ofrece reintento.
       widgets = DEFAULT_WIDGETS.map((w) => ({ ...w }));
       prefsFailed = true;
+    } finally {
+      widgetsLoading = false;
     }
   }
 
@@ -366,8 +389,193 @@ export async function renderHomeView(container, apiBase) {
   }
 
   // --- Estructura -----------------------------------------------------------
-  function visibleWidgets() {
-    return widgets.filter((w) => w.is_visible).sort((a, b) => a.position - b.position);
+  function activeWidgetPreferences() {
+    return customizingWidgets && widgetDraft ? widgetDraft : widgets;
+  }
+
+  function visibleWidgets(source = activeWidgetPreferences()) {
+    return source.filter((w) => w.is_visible).sort((a, b) => a.position - b.position);
+  }
+
+  function visibleWidgetGroups(zone, source = activeWidgetPreferences()) {
+    const inZone = source
+      .filter((w) => w.is_visible && WIDGET_ROLES[w.widget_id] === zone)
+      .sort((a, b) => a.position - b.position);
+    const groups = [];
+    let captureAdded = false;
+    for (const widget of inZone) {
+      if (CAPTURE_WIDGET_IDS.includes(widget.widget_id)) {
+        if (captureAdded) continue;
+        captureAdded = true;
+        const captureWidgets = source
+          .filter((item) => WIDGET_ROLES[item.widget_id] === zone && CAPTURE_WIDGET_IDS.includes(item.widget_id))
+          .sort((a, b) => a.position - b.position);
+        groups.push({
+          id: "quick_add",
+          widgetIds: captureWidgets.map((item) => item.widget_id),
+          label: "Captura rápida",
+          zone,
+        });
+      } else {
+        groups.push({
+          id: widget.widget_id,
+          widgetIds: [widget.widget_id],
+          label: widget.label,
+          zone,
+        });
+      }
+    }
+    return groups;
+  }
+
+  function widgetCardAttrs(groupId, widgetIds, zone) {
+    return `class="widget-card home-widget-card" data-widget-group="${groupId}" data-widget-ids="${widgetIds.join(" ")}" data-widget-zone="${zone}" tabindex="-1"`;
+  }
+
+  function decorateWidgetCard(markup, group) {
+    return markup.replace(/<div class="widget-card"([^>]*)>/, (_match, attrs) => {
+      const cleanAttrs = attrs.replace(/\s+tabindex="-1"/g, "");
+      return `<div ${widgetCardAttrs(group.id, group.widgetIds, group.zone)}${cleanAttrs}>${widgetEditorMarkup(group.id, group.label, group.zone)}`;
+    });
+  }
+
+  function widgetEditorMarkup(groupId, label, zone) {
+    if (!customizingWidgets) return "";
+    const groups = visibleWidgetGroups(zone);
+    if (groups.length < 2) return "";
+    const index = groups.findIndex((group) => group.id === groupId);
+    const disabled = widgetSaveState === "saving";
+    return `
+      <div class="home-widget-editor">
+        <span class="home-widget-handle" data-action="widget-drag-handle"
+              data-widget-group="${groupId}" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+            <circle cx="6" cy="4" r="1.25"/><circle cx="12" cy="4" r="1.25"/>
+            <circle cx="6" cy="9" r="1.25"/><circle cx="12" cy="9" r="1.25"/>
+            <circle cx="6" cy="14" r="1.25"/><circle cx="12" cy="14" r="1.25"/>
+          </svg>
+        </span>
+        <div class="home-widget-editor__moves">
+          <button type="button" class="home-widget-move" id="widget-move-${groupId}-up"
+                  data-action="move-widget" data-widget-group="${groupId}" data-direction="up"
+                  aria-label="Mover ${escapeHtml(label)} arriba" ${disabled || index <= 0 ? "disabled" : ""}>↑</button>
+          <button type="button" class="home-widget-move" id="widget-move-${groupId}-down"
+                  data-action="move-widget" data-widget-group="${groupId}" data-direction="down"
+                  aria-label="Mover ${escapeHtml(label)} abajo" ${disabled || index === groups.length - 1 ? "disabled" : ""}>↓</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function normalizeWidgetDraftByZones() {
+    if (!widgetDraft) return;
+    const orderedIds = [];
+    const seen = new Set();
+    const append = (id) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      orderedIds.push(id);
+    };
+    for (const zone of WIDGET_ZONES) {
+      for (const group of visibleWidgetGroups(zone, widgetDraft)) {
+        group.widgetIds.forEach(append);
+      }
+    }
+    const hidden = widgetDraft
+      .filter((widget) => !widget.is_visible)
+      .sort((a, b) => a.position - b.position);
+    hidden.forEach((widget) => append(widget.widget_id));
+    for (const widget of widgetDraft.slice().sort((a, b) => a.position - b.position)) {
+      append(widget.widget_id);
+    }
+    const positions = new Map(orderedIds.map((id, index) => [id, index]));
+    widgetDraft = widgetDraft.map((widget) => ({
+      ...widget,
+      position: positions.get(widget.widget_id),
+    }));
+  }
+
+  function normalizeWidgetDraftFromDom() {
+    if (!widgetDraft) return;
+    const orderedIds = [];
+    for (const zone of WIDGET_ZONES) {
+      const zoneEl = container.querySelector(`[data-home-zone="${zone}"]`);
+      for (const card of zoneEl.querySelectorAll(".home-widget-card")) {
+        for (const id of card.dataset.widgetIds.split(" ")) {
+          if (id && !orderedIds.includes(id)) orderedIds.push(id);
+        }
+      }
+    }
+    const hidden = widgetDraft
+      .filter((widget) => !widget.is_visible)
+      .sort((a, b) => a.position - b.position);
+    for (const widget of hidden) {
+      if (!orderedIds.includes(widget.widget_id)) orderedIds.push(widget.widget_id);
+    }
+    const positions = new Map(orderedIds.map((id, index) => [id, index]));
+    widgetDraft = widgetDraft.map((widget) => ({
+      ...widget,
+      position: positions.get(widget.widget_id),
+    }));
+  }
+
+  function widgetDraftIsDirty() {
+    if (!widgetDraft) return false;
+    const savedById = new Map(widgets.map((widget) => [widget.widget_id, widget]));
+    return widgetDraft.some((widget) => {
+      const saved = savedById.get(widget.widget_id);
+      return !saved || saved.position !== widget.position || saved.is_visible !== widget.is_visible;
+    });
+  }
+
+  function renderCustomizePanel() {
+    if (!customizingWidgets || !widgetDraft) {
+      customizePanel.innerHTML = "";
+      return;
+    }
+    const sorted = widgetDraft.slice().sort((a, b) => a.position - b.position);
+    const isSaving = widgetSaveState === "saving";
+    customizePanel.innerHTML = `
+      <section class="home-customize-panel" aria-labelledby="home-customize-title">
+        <div class="home-customize-panel__intro">
+          <h2 id="home-customize-title">Personalizar secciones</h2>
+          <p>Ordena cada columna con las asas o los botones. Las zonas no se pueden cambiar.</p>
+        </div>
+        <fieldset class="home-customize-visibility">
+          <legend>Secciones visibles o disponibles</legend>
+          <div class="home-customize-visibility__list">
+            ${sorted
+              .map(
+                (widget) => `
+                  <label class="home-customize-toggle" for="widget-visibility-${widget.widget_id}">
+                    <input type="checkbox" id="widget-visibility-${widget.widget_id}"
+                           data-action="widget-visibility" data-widget-id="${widget.widget_id}"
+                           aria-label="${escapeHtml(widget.label)} visible"
+                           ${widget.is_visible ? "checked" : ""} ${isSaving ? "disabled" : ""}>
+                    <span class="home-customize-toggle__name">${escapeHtml(widget.label)}</span>
+                    <span class="home-customize-toggle__zone">${ZONE_LABELS[WIDGET_ROLES[widget.widget_id]] || "columna principal"}</span>
+                    <span class="home-customize-toggle__state">${widget.is_visible ? "Visible" : "Oculta"}</span>
+                  </label>
+                `
+              )
+              .join("")}
+          </div>
+        </fieldset>
+        <div class="home-customize-panel__footer">
+          <div class="home-customize-panel__messages">
+            <p class="home-customize-error" role="alert">${widgetSaveError ? escapeHtml(widgetSaveError) : ""}</p>
+            <p class="home-customize-status" id="home-widget-status" role="status" aria-live="polite" aria-atomic="true">${escapeHtml(widgetAnnouncement || (widgetSaveState === "saved" ? "Preferencias guardadas." : ""))}</p>
+          </div>
+          <div class="home-customize-panel__actions">
+            <button type="button" class="btn btn--secondary" data-action="cancel-customization" ${isSaving ? "disabled" : ""}>Cancelar</button>
+            <button type="button" class="btn btn--primary" id="home-widget-save"
+                    data-action="save-customization" ${isSaving || !widgetDraftIsDirty() ? "disabled" : ""}>
+              ${isSaving ? "Guardando…" : widgetSaveError ? "Reintentar" : "Guardar cambios"}
+            </button>
+          </div>
+        </div>
+      </section>
+    `;
   }
 
   // Guarda lo escrito en la captura antes de re-renderizar: un re-render
@@ -439,6 +647,10 @@ export async function renderHomeView(container, apiBase) {
     syncDraftsFromDom();
     renderHeader();
     renderPrefsNotice();
+    renderCustomizePanel();
+    editBtn.setAttribute("aria-pressed", String(customizingWidgets));
+    editLabel.textContent = customizingWidgets ? "Guardar y finalizar" : "Personalizar";
+    editBtn.disabled = widgetsLoading || prefsFailed || widgetSaveState === "saving";
 
     const visible = visibleWidgets();
     if (visible.length === 0) {
@@ -447,8 +659,8 @@ export async function renderHomeView(container, apiBase) {
           <div class="empty-state">
             <div class="empty-state__icon" aria-hidden="true">&#9881;</div>
             <p class="empty-state__title">No hay secciones visibles</p>
-            <p class="empty-state__text">Activa alg&uacute;n widget en la configuraci&oacute;n para ver tu d&iacute;a.</p>
-            <button class="btn btn--primary" data-action="open-config">Personalizar</button>
+            <p class="empty-state__text">Activa alguna secci&oacute;n desde el panel Personalizar para volver a ver tu d&iacute;a.</p>
+            ${customizingWidgets ? "" : '<button class="btn btn--primary" data-action="begin-customization">Personalizar</button>'}
           </div>
         </div>
       `;
@@ -535,18 +747,38 @@ export async function renderHomeView(container, apiBase) {
   }
 
   function renderMainWidget(w) {
-    if (w.widget_id === "upcoming_tasks") return renderTasksCard();
-    if (w.widget_id === "active_projects") return renderProjectsCard();
+    const group = {
+      id: w.widget_id,
+      widgetIds: [w.widget_id],
+      label: w.label,
+      zone: "main",
+    };
+    if (w.widget_id === "upcoming_tasks") return decorateWidgetCard(renderTasksCard(), group);
+    if (w.widget_id === "active_projects") return decorateWidgetCard(renderProjectsCard(), group);
     return "";
   }
 
   function renderSideWidget(w) {
-    if (w.widget_id === "habits_today") return renderHabitsCard();
+    if (w.widget_id === "habits_today") {
+      return decorateWidgetCard(renderHabitsCard(), {
+        id: w.widget_id,
+        widgetIds: [w.widget_id],
+        label: w.label,
+        zone: "side",
+      });
+    }
     return "";
   }
 
   function renderFullWidget(w) {
-    if (w.widget_id === "habits_week") return renderWeekCard();
+    if (w.widget_id === "habits_week") {
+      return decorateWidgetCard(renderWeekCard(), {
+        id: w.widget_id,
+        widgetIds: [w.widget_id],
+        label: w.label,
+        zone: "full",
+      });
+    }
     return "";
   }
 
@@ -839,7 +1071,7 @@ export async function renderHomeView(container, apiBase) {
     captureMode = showTask && showNote ? captureMode : showTask ? "task" : "note";
     const showModeSelector = showTask && showNote;
     const projects = data.projects || [];
-    return `
+    const markup = `
       <div class="widget-card" id="widget-quick_add">
         <div class="widget-content" id="widget-content-quick_add">
           <section class="home-capture" aria-labelledby="home-capture-title">
@@ -898,6 +1130,12 @@ export async function renderHomeView(container, apiBase) {
         </div>
       </div>
     `;
+    return decorateWidgetCard(markup, {
+      id: "quick_add",
+      widgetIds: CAPTURE_WIDGET_IDS,
+      label: "Captura rápida",
+      zone: "side",
+    });
   }
 
   // --- Bloque: Semana de hábitos (HAB-002) -----------------------------------
@@ -1191,6 +1429,15 @@ export async function renderHomeView(container, apiBase) {
     if (el) el.focus();
   }
 
+  container.addEventListener("pointerdown", startWidgetDrag, { signal: eventController.signal });
+  container.addEventListener("pointermove", moveWidgetDrag, { signal: eventController.signal });
+  container.addEventListener("pointerup", (event) => finishWidgetDrag(event, true), {
+    signal: eventController.signal,
+  });
+  container.addEventListener("pointercancel", (event) => finishWidgetDrag(event, false), {
+    signal: eventController.signal,
+  });
+
   // Delegación de eventos: el contenido se re-renderiza con frecuencia.
   container.addEventListener("click", async (event) => {
     const captureModeBtn = event.target.closest('[data-action="capture-mode"]');
@@ -1225,9 +1472,27 @@ export async function renderHomeView(container, apiBase) {
       return;
     }
 
-    const openConfigBtn = event.target.closest('[data-action="open-config"]');
-    if (openConfigBtn) {
-      openConfig();
+    const beginCustomizeBtn = event.target.closest('[data-action="begin-customization"]');
+    if (beginCustomizeBtn) {
+      beginCustomization();
+      return;
+    }
+
+    const moveWidgetBtn = event.target.closest('[data-action="move-widget"]');
+    if (moveWidgetBtn) {
+      moveWidgetGroup(moveWidgetBtn.dataset.widgetGroup, moveWidgetBtn.dataset.direction);
+      return;
+    }
+
+    const saveCustomizeBtn = event.target.closest('[data-action="save-customization"]');
+    if (saveCustomizeBtn) {
+      await saveWidgetPreferences();
+      return;
+    }
+
+    const cancelCustomizeBtn = event.target.closest('[data-action="cancel-customization"]');
+    if (cancelCustomizeBtn) {
+      cancelCustomization();
       return;
     }
 
@@ -1262,177 +1527,269 @@ export async function renderHomeView(container, apiBase) {
     }
   }, { signal: eventController.signal });
 
-  // --- Configuración de widgets (modal) -------------------------------------
-  function openConfig() {
-    // Con el catálogo sin cargar se muestran los defaults: guardar desde
-    // aquí sobrescribiría las preferencias reales. El aviso en cabecera
-    // ofrece el reintento (UX-01 §5).
-    if (prefsFailed) {
+  container.addEventListener("change", (event) => {
+    const visibilityToggle = event.target.closest('[data-action="widget-visibility"]');
+    if (!visibilityToggle || !widgetDraft || widgetSaveState === "saving") return;
+    const widget = widgetDraft.find((item) => item.widget_id === visibilityToggle.dataset.widgetId);
+    if (!widget) return;
+    widget.is_visible = visibilityToggle.checked;
+    normalizeWidgetDraftByZones();
+    widgetSaveState = "idle";
+    widgetSaveError = "";
+    widgetAnnouncement = `${widget.label}: ${widget.is_visible ? "visible" : "oculta"}.`;
+    renderAll();
+  }, { signal: eventController.signal });
+
+  function beginCustomization() {
+    if (widgetsLoading || prefsFailed) {
       showToast("No se pudieron cargar las preferencias. Reintent&aacute; primero.", "error");
       const retry = container.querySelector('[data-action="retry-widgets"]');
       if (retry) retry.focus();
       return;
     }
-    // Elemento que tenía el foco antes de abrir: se restaura al cerrar.
-    const previouslyFocused = document.activeElement;
-    const overlay = document.createElement("div");
-    overlay.className = "modal-overlay";
-    overlay.innerHTML = `
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="config-title">
-        <h2 class="modal__title" id="config-title">Personalizar</h2>
-        <p class="modal__text">Selecciona qu&eacute; secciones mostrar y su orden.</p>
-        <div id="widgets-config" style="margin-bottom: 16px;"></div>
-        <div class="modal__actions">
-          <button class="btn btn--secondary" id="widgets-cancel-btn">Cancelar</button>
-          <button class="btn btn--primary" id="widgets-save-btn">Guardar preferencias</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-
-    const configEl = overlay.querySelector("#widgets-config");
-    const saveBtn = overlay.querySelector("#widgets-save-btn");
-    const cancelBtn = overlay.querySelector("#widgets-cancel-btn");
-
-    // Cierre único: quita el overlay, el listener de teclado y devuelve el
-    // foco a donde estaba (así el teclado no pierde el lugar).
-    function close() {
-      document.removeEventListener("keydown", onKey, true);
-      overlay.remove();
-      if (previouslyFocused && previouslyFocused.focus && previouslyFocused.isConnected) {
-        previouslyFocused.focus();
-      }
-    }
-
-    // Teclado: ESC cierra y Tab queda atrapado dentro del modal (mismo patrón
-    // que el modal de confirmación de app.js).
-    function onKey(e) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        close();
-        return;
-      }
-      if (e.key !== "Tab") return;
-      const focusable = overlay.querySelectorAll(
-        "button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex='-1'])"
-      );
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKey, true);
-
-    // Renderizar filas de configuración
-    const sorted = [...widgets].sort((a, b) => a.position - b.position);
-    configEl.innerHTML = sorted
-      .map(
-        (w, idx) => `
-      <div class="widget-config-row" data-widget="${w.widget_id}">
-        <label>
-          <input type="checkbox" ${w.is_visible ? "checked" : ""}>
-          ${w.label}
-        </label>
-        <div class="widget-config-controls">
-          <button class="btn btn--secondary btn--sm" data-move="up" data-idx="${idx}" ${idx === 0 ? "disabled" : ""}>&uarr;</button>
-          <button class="btn btn--secondary btn--sm" data-move="down" data-idx="${idx}" ${idx === sorted.length - 1 ? "disabled" : ""}>&darr;</button>
-        </div>
-      </div>
-    `
-      )
-      .join("");
-
-    // Mover widgets arriba/abajo
-    configEl.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-move]");
-      if (!btn) return;
-      const idx = parseInt(btn.dataset.idx, 10);
-      const dir = btn.dataset.move === "up" ? -1 : 1;
-      const targetIdx = idx + dir;
-      if (targetIdx < 0 || targetIdx >= sorted.length) return;
-      [sorted[idx], sorted[targetIdx]] = [sorted[targetIdx], sorted[idx]];
-      // Re-render
-      configEl.innerHTML = sorted
-        .map(
-          (w, i) => `
-        <div class="widget-config-row" data-widget="${w.widget_id}">
-          <label>
-            <input type="checkbox" ${w.is_visible ? "checked" : ""}>
-            ${w.label}
-          </label>
-          <div class="widget-config-controls">
-            <button class="btn btn--secondary btn--sm" data-move="up" data-idx="${i}" ${i === 0 ? "disabled" : ""}>&uarr;</button>
-            <button class="btn btn--secondary btn--sm" data-move="down" data-idx="${i}" ${i === sorted.length - 1 ? "disabled" : ""}>&darr;</button>
-          </div>
-        </div>
-      `
-        )
-        .join("");
-    });
-
-    // Guardar
-    saveBtn.addEventListener("click", async () => {
-      const prefs = [];
-      const rows = configEl.querySelectorAll(".widget-config-row");
-      rows.forEach((row, idx) => {
-        const widgetId = row.getAttribute("data-widget");
-        const checkbox = row.querySelector("input[type=checkbox]");
-        prefs.push({
-          widget_id: widgetId,
-          is_visible: checkbox.checked,
-          position: idx,
-        });
-      });
-
-      let saved = null;
-      try {
-        const res = await fetch(`${apiBase}/dashboard/widgets`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(prefs),
-        });
-        if (res.ok) {
-          saved = await res.json();
-        } else {
-          const err = await res.json().catch(() => ({}));
-          showToast(err.detail || "Error guardando preferencias", "error");
-          return;
-        }
-      } catch (error) {
-        showToast("Error de conexi&oacute;n guardando preferencias", "error");
-        return;
-      }
-
-      // PUT devuelve widget_id/is_visible/position sin label: se fusiona
-      // sobre el catálogo actual para conservar labels y descripción, y el
-      // nuevo orden se renderiza sin recargar la página (UX-01 §8.10).
-      const byId = new Map(saved.map((s) => [s.widget_id, s]));
-      widgets = widgets.map((w) =>
-        byId.has(w.widget_id) ? { ...w, ...byId.get(w.widget_id) } : w
-      );
-      close();
-      showToast("Preferencias guardadas", "success");
-      renderAll();
-    });
-
-    // Cancelar
-    cancelBtn.addEventListener("click", close);
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
-    });
-
-    // Focus en el primer checkbox
-    const firstCheckbox = configEl.querySelector("input[type=checkbox]");
-    if (firstCheckbox) firstCheckbox.focus();
+    widgetDraft = widgets.map((widget) => ({ ...widget }));
+    customizingWidgets = true;
+    widgetSaveState = "idle";
+    widgetSaveError = "";
+    widgetAnnouncement = "";
+    renderAll();
+    const firstToggle = container.querySelector('[data-action="widget-visibility"]');
+    const firstMove = container.querySelector('[data-action="move-widget"]:not([disabled])');
+    (firstToggle || firstMove || customizePanel).focus();
   }
 
-  editBtn.addEventListener("click", openConfig);
+  function cancelCustomization() {
+    if (widgetSaveState === "saving") return;
+    widgetDraft = null;
+    customizingWidgets = false;
+    widgetSaveState = "idle";
+    widgetSaveError = "";
+    widgetAnnouncement = "";
+    renderAll();
+    editBtn.focus();
+  }
+
+  function announceWidget(message) {
+    if (widgetAnnouncement === message) return;
+    widgetAnnouncement = message;
+    const status = container.querySelector("#home-widget-status");
+    if (status) status.textContent = message;
+  }
+
+  function focusWidgetGroup(groupId) {
+    const card = container.querySelector(`.home-widget-card[data-widget-group="${groupId}"]`);
+    if (card) card.focus();
+  }
+
+  function moveWidgetGroup(groupId, direction) {
+    if (!widgetDraft || widgetSaveState === "saving" || !["up", "down"].includes(direction)) return;
+    const card = container.querySelector(`.home-widget-card[data-widget-group="${groupId}"]`);
+    if (!card) return;
+    const zone = card.dataset.widgetZone;
+    const cards = Array.from(card.parentElement.querySelectorAll(".home-widget-card"));
+    const index = cards.indexOf(card);
+    const target = cards[index + (direction === "up" ? -1 : 1)];
+    if (!target) return;
+    if (direction === "up") card.parentElement.insertBefore(card, target);
+    else card.parentElement.insertBefore(target, card);
+    normalizeWidgetDraftFromDom();
+    const groups = visibleWidgetGroups(zone);
+    const nextIndex = groups.findIndex((group) => group.id === groupId);
+    const label = groups[nextIndex]?.label || groupId;
+    widgetSaveState = "idle";
+    widgetSaveError = "";
+    widgetAnnouncement = `${label} movido a la posición ${nextIndex + 1} de ${groups.length} en ${ZONE_LABELS[zone]}.`;
+    renderAll();
+    focusWidgetGroup(groupId);
+  }
+
+  function clearDropHighlights() {
+    container.querySelectorAll(".home-drop-forbidden").forEach((zone) => {
+      zone.classList.remove("home-drop-forbidden");
+    });
+    container.querySelectorAll(".home-widget-card--drop-target").forEach((card) => {
+      card.classList.remove("home-widget-card--drop-target");
+    });
+  }
+
+  function updateDragTarget(event) {
+    const state = dragState;
+    if (!state || !state.started) return;
+    clearDropHighlights();
+    const pointed = document.elementFromPoint(event.clientX, event.clientY);
+    const targetZone = pointed && pointed.closest("[data-home-zone]");
+    if (!targetZone || targetZone !== state.source.parentElement) {
+      state.invalid = true;
+      if (targetZone) targetZone.classList.add("home-drop-forbidden");
+      announceWidget("No se puede soltar una sección en otra columna.");
+      return;
+    }
+
+    state.invalid = false;
+    const targetCard = pointed.closest(".home-widget-card");
+    if (targetCard) {
+      targetCard.classList.add("home-widget-card--drop-target");
+      const rect = targetCard.getBoundingClientRect();
+      const before = event.clientY < rect.top + rect.height / 2;
+      targetZone.insertBefore(state.placeholder, before ? targetCard : targetCard.nextSibling);
+    } else {
+      targetZone.appendChild(state.placeholder);
+    }
+    announceWidget("Suelta la sección en esta columna para cambiar su posición.");
+  }
+
+  function startWidgetDrag(event) {
+    const handle = event.target.closest('[data-action="widget-drag-handle"]');
+    if (!handle || !customizingWidgets || widgetSaveState === "saving" || event.button !== 0) return;
+    const source = handle.closest(".home-widget-card");
+    if (!source) return;
+    const zone = source.dataset.widgetZone;
+    if (visibleWidgetGroups(zone).length < 2) return;
+    const placeholder = document.createElement("div");
+    placeholder.className = "home-widget-drop-placeholder";
+    placeholder.setAttribute("aria-hidden", "true");
+    placeholder.textContent = "Soltar aquí";
+    placeholder.style.height = `${source.getBoundingClientRect().height}px`;
+    dragState = {
+      handle,
+      pointerId: event.pointerId,
+      source,
+      zone,
+      placeholder,
+      startX: event.clientX,
+      startY: event.clientY,
+      started: false,
+      invalid: false,
+      initialOrder: Array.from(source.parentElement.querySelectorAll(".home-widget-card"))
+        .map((card) => card.dataset.widgetGroup),
+    };
+    handle.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveWidgetDrag(event) {
+    const state = dragState;
+    if (!state || state.pointerId !== event.pointerId) return;
+    if (!state.started) {
+      const distance = Math.hypot(event.clientX - state.startX, event.clientY - state.startY);
+      if (distance < 5) return;
+      state.started = true;
+      state.source.classList.add("home-widget-card--dragging");
+      state.source.parentElement.insertBefore(state.placeholder, state.source);
+      const group = visibleWidgetGroups(state.zone).find(
+        (item) => item.id === state.source.dataset.widgetGroup
+      );
+      announceWidget(`Arrastrando ${group ? group.label : "sección"}.`);
+    }
+    event.preventDefault();
+    const edgeSize = 64;
+    if (event.clientY > window.innerHeight - edgeSize) window.scrollBy(0, 18);
+    else if (event.clientY < edgeSize) window.scrollBy(0, -18);
+    updateDragTarget(event);
+  }
+
+  function finishWidgetDrag(event, commit) {
+    const state = dragState;
+    if (!state || state.pointerId !== event.pointerId) return;
+    dragState = null;
+    clearDropHighlights();
+    state.source.classList.remove("home-widget-card--dragging");
+    if (state.handle.hasPointerCapture(state.pointerId)) {
+      state.handle.releasePointerCapture(state.pointerId);
+    }
+    if (!state.started) return;
+
+    const validDrop = commit && !state.invalid && state.placeholder.parentElement === state.source.parentElement;
+    if (!validDrop) {
+      state.placeholder.remove();
+      announceWidget("Movimiento cancelado. La sección conserva su posición.");
+      return;
+    }
+    state.placeholder.parentElement.insertBefore(state.source, state.placeholder);
+    state.placeholder.remove();
+    const nextOrder = Array.from(state.source.parentElement.querySelectorAll(".home-widget-card"))
+      .map((card) => card.dataset.widgetGroup);
+    if (nextOrder.join("|") === state.initialOrder.join("|")) {
+      announceWidget("La sección conserva su posición.");
+      return;
+    }
+    normalizeWidgetDraftFromDom();
+    const groups = visibleWidgetGroups(state.zone);
+    const index = groups.findIndex((group) => group.id === state.source.dataset.widgetGroup);
+    const group = groups[index];
+    widgetSaveState = "idle";
+    widgetSaveError = "";
+    widgetAnnouncement = `${group.label} movido a la posición ${index + 1} de ${groups.length} en ${ZONE_LABELS[state.zone]}.`;
+    renderAll();
+    focusWidgetGroup(group.id);
+  }
+
+  async function saveWidgetPreferences(exitAfterSave = false) {
+    if (!customizingWidgets || !widgetDraft || prefsFailed || widgetSaveState === "saving") return;
+    if (!widgetDraftIsDirty()) {
+      if (exitAfterSave) cancelCustomization();
+      else announceWidget("No hay cambios pendientes.");
+      return;
+    }
+    normalizeWidgetDraftByZones();
+    widgetSaveState = "saving";
+    widgetSaveError = "";
+    widgetAnnouncement = "Guardando preferencias.";
+    renderAll();
+    try {
+      const res = await fetch(`${apiBase}/dashboard/widgets`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(widgetDraft.map(({ widget_id, is_visible, position }) => ({
+          widget_id,
+          is_visible,
+          position,
+        }))),
+      });
+      const saved = await res.json();
+      if (!res.ok) {
+        throw new Error(formatApiDetail(saved.detail, "No se pudieron guardar las preferencias."));
+      }
+      if (!Array.isArray(saved) || saved.length !== widgets.length) {
+        throw new Error("La respuesta del servidor no contiene el catálogo completo de widgets.");
+      }
+      const savedById = new Map(saved.map((widget) => [widget.widget_id, widget]));
+      if (widgets.some((widget) => !savedById.has(widget.widget_id))) {
+        throw new Error("La respuesta del servidor no coincide con el catálogo de widgets.");
+      }
+      widgets = widgets.map((widget) => ({ ...widget, ...savedById.get(widget.widget_id) }));
+      widgetDraft = widgets.map((widget) => ({ ...widget }));
+      widgetSaveState = "saved";
+      widgetAnnouncement = "Preferencias guardadas.";
+      renderAll();
+      if (exitAfterSave) {
+        customizingWidgets = false;
+        widgetDraft = null;
+        widgetSaveState = "idle";
+        widgetAnnouncement = "";
+        renderAll();
+        editBtn.focus();
+        showToast("Preferencias guardadas", "success");
+      }
+    } catch (error) {
+      widgetSaveState = "error";
+      widgetSaveError = error.message || "No se pudieron guardar las preferencias.";
+      widgetAnnouncement = "";
+      renderAll();
+      const saveBtn = container.querySelector("#home-widget-save");
+      if (saveBtn) saveBtn.focus();
+    }
+  }
+
+  function toggleCustomization() {
+    if (!customizingWidgets) {
+      beginCustomization();
+      return;
+    }
+    saveWidgetPreferences(true);
+  }
+
+  editBtn.addEventListener("click", toggleCustomization, { signal: eventController.signal });
 
   await load();
 }

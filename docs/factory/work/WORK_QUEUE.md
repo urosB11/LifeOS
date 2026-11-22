@@ -46,8 +46,8 @@ Prioridad P1 · Developer Mimo · **Estado: REVIEW** (2026-11-22) · Depende de 
 Atención y Hoy son disjuntas por ID, conservan límites y contadores; los errores no se anuncian como listas vacías; proyectos sin tareas muestran “Sin tareas”; Captura rápida tiene modos Tarea/Nota, un solo formulario visible, borradores separados y contenido de nota. La zona horaria configurada gobierna Home y el reloj local del backend ahora lee correctamente la preferencia guardada. Sin cambios de API, modelo, migración ni dependencias. QA: 141 pytest, Ruff, node --check, smoke HTTP/API y matriz visual Home 1440×900, 768×1024, 390×844 en ambos temas sin overflow. Handoff: UX-HOME-002/HANDOFF.md. Pendiente revisión/aceptación del PO.
 
 ### UX-WIDGETS-002 — Personalización visual de widgets
-Prioridad P1 · Developer Mimo · Estado: READY · Depende de UX-HOME-002 · Spec: UX-WIDGETS-002/SPEC.md.  
-Reemplazar los editores duplicados (modal de flechas en Home + posiciones numéricas en Settings) por un modo Personalizar en Home con arrastre desde asas, Guardar/Cancelar y alternativa accesible mover arriba/abajo. Reordenar solo dentro de las zonas funcionales existentes. Reutilizar GET/PUT /dashboard/widgets y position; sin migración ni zona nueva.
+Prioridad P1 · Developer Mimo · **Estado: REVIEW** (2026-11-22) · Depende de UX-HOME-002 · Spec: UX-WIDGETS-002/SPEC.md.
+Home ahora ofrece personalización explícita con arrastre por asa, controles accesibles mover arriba/abajo, visibilidad independiente y guardar/cancelar; Settings ya no duplica el editor. Solo se reordenan widgets dentro de sus zonas actuales y Captura rápida se mueve como grupo. Sin cambios de API, modelo, migración ni dependencias. QA propia: 141 pytest, Ruff, node --check, persistencia/error/reintento, teclado y matriz visual en 1440×900, 768×1024 y 390×844 en ambos temas sin overflow. Handoff: UX-WIDGETS-002/HANDOFF.md. Pendiente revisión independiente y aceptación del PO.
 
 ### UX-MODULES-002 — Formularios progresivos y edición de notas
 Prioridad P1 · Developer Mimo · Estado: READY · Depende de UX-WIDGETS-002 · Spec: UX-MODULES-002/SPEC.md.  
