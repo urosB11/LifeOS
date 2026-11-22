@@ -2,6 +2,8 @@
 
 **Leer antes de ejecutar cualquier tarea.**
 
+Fuente de alcance y estado: docs/factory/work/WORK_QUEUE.md. Toda tarea READY requiere leer su SPEC completa.
+
 ## 1. Rama de trabajo
 
 La documentación de evolución se encuentra en la rama remota product/lifeos-evolution, creada desde main en el commit 27791fc8a157a8733f5bb322a7f19c845a251995.
@@ -32,22 +34,28 @@ Si hay cambios locales, conflictos o archivos desconocidos, no ejecutar stash, r
 9. docs/factory/work/WORK_QUEUE.md
 10. SPEC.md de la tarea.
 
-## 3. Delegación autónoma vigente
+## 3. Delegación y orden de trabajo vigente
 
-El Product Owner autorizó ejecutar autónomamente las tareas READY de Fase 9 que tengan especificación. No solicitar confirmación para decisiones rutinarias dentro de esos límites.
+WORK_QUEUE.md es la fuente de verdad para estado, prioridad, responsable y dependencias. No usar listas antiguas de asignaciones de Fase 9 como autorización vigente: las entregas anteriores figuran en REVIEW.
 
-Orden de trabajo y responsabilidades:
-1. STAB-001 — Mimo completa la revisión independiente de Fase 8. Solo revisión, sin código.
-2. BUG-001 — Nemo corrige la pérdida de estado del formulario ante error.
-3. HAB-002 — Mimo toma temporalmente el rol Developer asignado por el PO; Nemo hace la revisión independiente. Implementa semana interactiva y calendarios por hábito.
-4. PRJ-UI-001 — Mimo como Developer; Nemo como Reviewer. Mantiene la lista de tareas visible al abrir el formulario del proyecto. Esperar a BUG-001 para no solapar cambios en projects.js.
-5. HOME-001 — Nemo; esperar HAB-002 por solapamiento en home.js.
-6. TASK-001 — Nemo, después de HOME-001.
-7. UX-REVIEW-001 — Mimo realiza la revisión independiente después de HOME-001 y TASK-001.
+### Fase 9.1 — Interacción directa y experiencia fluida
 
-La asignación de rol es por tarea. Mimo primero debe completar STAB-001 como Reviewer; luego puede asumir Developer únicamente en HAB-002 y PRJ-UI-001. No debe revisar su propia implementación: Nemo es el Reviewer de esas dos entregas.
+Responsable de implementación: Mimo (Developer). Rama: product/lifeos-evolution.
 
-PRJ-WORKSPACE-001, PRJ-PLAN-001 y ANALYTICS-001 siguen siendo PLANNING: autorizan diseño/documentación solamente, nunca código ni migraciones.
+Orden obligatorio:
+1. RESPONSIVE-002 — corregir el overflow horizontal móvil conocido.
+2. UX-HOME-002 — claridad, exactitud y captura rápida de Home.
+3. UX-WIDGETS-002 — modo Personalizar en Home y reordenamiento drag & drop dentro de las zonas existentes.
+4. UX-MODULES-002 — formularios progresivos de Projects/Notes y edición de notas.
+5. UX-REVIEW-002 — revisión UX sin código por un agente distinto de Mimo (Copilot UX, si está disponible).
+
+Las cuatro primeras tareas tienen SPEC y estado READY. Se ejecutan secuencialmente, una por una, respetando la dependencia y verificando el cierre técnico de cada entrega antes de comenzar la siguiente. UX-REVIEW-002 permanece PLANNING hasta que las implementaciones estén en REVIEW.
+
+El PO aprobó el reordenamiento dentro de las zonas actuales. No está aprobado mover widgets entre zonas/columnas ni cambiar el modelo de datos. No iniciar esa extensión.
+
+Las entregas previas STAB-001, BUG-001, HAB-002, PRJ-UI-001, HOME-001, TASK-001 y UX-REVIEW-001 permanecen en REVIEW hasta aceptación del PO; no reabrirlas salvo regresión o tarea específica.
+
+PRJ-WORKSPACE-001, PRJ-PLAN-001 y ANALYTICS-001 siguen PLANNING: autorizan diseño/documentación solamente, nunca código ni migraciones.
 
 ## 4. Autonomía y límites
 

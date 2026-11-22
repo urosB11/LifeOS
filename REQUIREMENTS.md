@@ -1,8 +1,8 @@
 # Life OS — Requisitos funcionales y no funcionales del MVP 0.1
 
 **Estado:** línea base de requisitos para implementación
-**Versión:** 0.2
-**Fecha:** 18 de noviembre de 2026
+**Versión:** 0.3
+**Fecha:** 22 de noviembre de 2026
 **Relacionado con:** `VISION.md`, `ARCHITECTURE.md`, `DATABASE.md` y `SECURITY.md`
 
 > Este documento define qué debe hacer el MVP. Las decisiones funcionales que afectan a esta versión están cerradas aquí; las tecnologías y límites técnicos se desarrollan en `ARCHITECTURE.md`.
@@ -47,7 +47,7 @@ Entregar una aplicación web local, responsive y de un solo usuario que permita 
 
 **FR-HOME-03 — Visibilidad.** El usuario puede mostrar u ocultar cualquiera de los widgets disponibles.
 
-**FR-HOME-04 — Orden.** El usuario puede cambiar el orden de los widgets mediante controles accesibles de mover arriba/abajo. El arrastre con mouse no es requisito del MVP.
+**FR-HOME-04 — Orden.** El usuario puede reordenar los widgets desde Home mediante un modo explícito de personalización. El arrastre desde un asa es una forma directa de hacerlo; debe existir una alternativa accesible de mover arriba/abajo que funcione con teclado y táctil. En la primera entrega el movimiento se limita a la zona funcional actual de cada widget: no se permite trasladarlos entre columnas o zonas. El orden y la visibilidad se conservan al reiniciar la aplicación.
 
 **FR-HOME-05 — Persistencia.** La visibilidad y el orden se conservan después de cerrar y reiniciar la aplicación.
 
@@ -127,7 +127,7 @@ Entregar una aplicación web local, responsive y de un solo usuario que permita 
 
 ### 3.7 Configuración
 
-**FR-SET-01 — Preferencias.** El usuario puede administrar la visibilidad y el orden del dashboard y elegir tema claro, oscuro o del sistema.
+**FR-SET-01 — Preferencias.** El usuario puede elegir tema claro, oscuro o del sistema y configurar la zona horaria. La visibilidad y el orden de los widgets se administran desde Home, que es la única interfaz de personalización del dashboard. Settings puede ofrecer un acceso directo a esa interfaz, pero no un segundo editor ni campos numéricos de posición.
 
 **FR-SET-02 — Zona horaria.** Se utiliza `America/Argentina/Cordoba` inicialmente. La zona horaria queda configurable, pero las fechas de vencimiento se conservan como fechas de calendario.
 

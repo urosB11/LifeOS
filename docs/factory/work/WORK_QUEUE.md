@@ -1,6 +1,6 @@
 # WORK_QUEUE — Cola central de trabajo
 
-**Actualizada:** 21 de noviembre de 2026. Coordinator mantiene; PO prioriza.
+**Actualizada:** 22 de noviembre de 2026. Coordinator mantiene; PO prioriza.
 
 ## Estados
 READY = especificada y autorizada; PLANNING = solo diseño; IN_PROGRESS = ejecución; REVIEW = revisión/aceptación; APPROVED = aceptada; DONE = cerrada; BLOCKED = decisión/dependencia; CANCELLED = cancelada.
@@ -12,7 +12,7 @@ READY = especificada y autorizada; PLANNING = solo diseño; IN_PROGRESS = ejecuc
 - PRJ-002: crear tareas desde proyecto, mismo commit.
 - HAB-001: calendario compacto, commit 27791fc8a157a8733f5bb322a7f19c845a251995.
 
-## Fase 9 — READY
+## Fase 9 — entregas anteriores en REVIEW
 ### STAB-001 — QA manual Fase 8
 Prioridad P0 · Reviewer Mimo · Spec STAB-001/SPEC.md · Solo revisión, no código. **Estado: REVIEW — veredicto de Mimo: REJECT** (2026-11-21). QA de Nemo verificado independientemente (139/139 pytest, ruff OK, node --check OK) + revisión visual Edge headless/CDP en 1440×900, 768×1024, 390×844. Hallazgos: ALTA overflow horizontal móvil en 5 pantallas (causa: `.main{margin:0 auto}` en flex column de `.app-content` — **no contemplado en la cola, requiere tarea nueva**); ALTA confirmada BUG-001 (campos perdidos tras error); MEDIA confirmada PRJ-UI-001 (tareas fuera del DOM con formulario abierto); MEDIA foco no restaurado al cerrar modal con ESC; BAJA favicon 404. Detalle en STAB-001/HANDOFF.md. Pendiente: aceptación del PO.
 
@@ -31,9 +31,40 @@ Prioridad P0 · Developer Nemo (ejecución reasignada por el PO a Mimo) · Depen
 ### TASK-001 — Espacio de trabajo de Tareas
 Prioridad P1 · Developer Nemo (ejecución reasignada por el PO a Mimo) · Secuencial después de HOME-001 · Spec TASK-001/SPEC.md. **Estado: REVIEW** (2026-11-21) — vista de Tareas rediseñada como espacio de trabajo: captura por acción compacta (panel desplegable oculto por defecto), edición con PATCH (incluye limpiar campos opcionales), completar/reabrir, eliminar con confirmación, filtros conservados con contadores globales + visibles, vencimientos con texto, enlace al proyecto y estados completos; en móvil las filas pasan a tipo tarjeta. QA propia: 140/140 pytest, ruff y node --check OK, QA interactiva/visual CDP en 3 viewports y 2 temas con 0 hallazgos. Handoff: `docs/factory/work/TASK-001/HANDOFF.md`.
 
+
+## Fase 9.1 — Interacción directa y experiencia fluida
+
+**Rama:** product/lifeos-evolution · **Developer:** Mimo · **Orden secuencial obligatorio.**  
+La etapa aplica la dirección de VISION.md y docs/product/UX_DIRECTION.md: interfaz útil y contextual, no CRUD administrativo ni dashboard decorativo. Mantiene el stack y la fuente de verdad actuales.
+
+### RESPONSIVE-002 — Corregir overflow horizontal móvil
+Prioridad P0 · Developer Mimo · Estado: READY · Spec: RESPONSIVE-002/SPEC.md · Sin dependencia.  
+Reproducir y corregir el desbordamiento horizontal identificado en STAB-001 en Projects, Habits y Notes. No ocultarlo con overflow-x:hidden ni recortar contenido. Verificar todas las rutas principales y navegación en 1440×900, 768×1024 y 390×844. Mantener el token global --text-muted fuera de alcance hasta decisión del PO.
+
+### UX-HOME-002 — Claridad de Home y captura contextual
+Prioridad P1 · Developer Mimo · Estado: READY · Depende de RESPONSIVE-002 · Spec: UX-HOME-002/SPEC.md.  
+Hacer disjuntas las secciones Atención y Hoy; distinguir error de carga de cero resultados; mostrar “Sin tareas” cuando un proyecto no tiene tareas; convertir Captura rápida en una única superficie con modos Tarea/Nota y permitir contenido de nota. Mantener IDs y preferencias de widgets, datos reales, zona horaria configurada y stack actual.
+
+### UX-WIDGETS-002 — Personalización visual de widgets
+Prioridad P1 · Developer Mimo · Estado: READY · Depende de UX-HOME-002 · Spec: UX-WIDGETS-002/SPEC.md.  
+Reemplazar los editores duplicados (modal de flechas en Home + posiciones numéricas en Settings) por un modo Personalizar en Home con arrastre desde asas, Guardar/Cancelar y alternativa accesible mover arriba/abajo. Reordenar solo dentro de las zonas funcionales existentes. Reutilizar GET/PUT /dashboard/widgets y position; sin migración ni zona nueva.
+
+### UX-MODULES-002 — Formularios progresivos y edición de notas
+Prioridad P1 · Developer Mimo · Estado: READY · Depende de UX-WIDGETS-002 · Spec: UX-MODULES-002/SPEC.md.  
+Colapsar por defecto los formularios permanentes de creación de Projects y Notes; conservar listas visibles; hacer progresivo el alta de etiquetas; habilitar edición de título y contenido de notas con PATCH actual. No rehacer Tasks, que ya tiene panel compacto, ni ocultar acciones frecuentes de Hábitos.
+
+### UX-REVIEW-002 — Revisión UX independiente
+Prioridad P1 · Reviewer distinto del Developer (Copilot UX preferente) · Estado: PLANNING · Spec: UX-REVIEW-002/SPEC.md.  
+Se habilita cuando las cuatro entregas anteriores estén en REVIEW. Solo lectura, sin código, commits ni cambios. Verifica flujos, estados, accesibilidad, teclado, puntero/táctil, temas y tres viewports. Mimo no puede autoaprobar sus entregas.
+
+**Secuencia para Mimo:** ejecutar RESPONSIVE-002 → UX-HOME-002 → UX-WIDGETS-002 → UX-MODULES-002. Una tarea por vez; commit y push verificado por tarea a product/lifeos-evolution; dejar REVIEW. Si la especificación no alcanza o una prueba contradice el modelo de producto, detener solo la parte afectada y elevar la decisión.
+
+**Decisiones expresamente fuera de alcance:** mover widgets entre main/side/full; migrar o extender widget_preferences; cambiar config_json; cambiar el token global --text-muted; cambiar el comportamiento del tema “Sistema”; añadir librerías/frameworks/endpoints; reconstruir Home o el shell completo.
+
+
 ## Revisión
 ### UX-REVIEW-001
-PLANNING · Reviewer Mimo · Después de HOME-001 y TASK-001. **Estado: REVIEW** (2026-11-21) — revisión de UX de Home y Tareas con auditoría objetiva (contraste calculado en el navegador, foco con teclado real, roles y nombres accesibles, trampa de foco del modal, estados y responsive en 3 viewports y 2 temas). Veredicto: **APROBADO CON CORRECCIONES APLICADAS** — 0 ALTA, 4 MEDIA (contraste AA, trampa de foco, restauración de foco y fuga del listener ESC en el modal de widgets) y 3 BAJA, todas corregidas y verificadas (0 fallos de contraste, 0 salidas del modal). Queda 1 pendiente de decisión del PO (token global `--text-muted`). **Nota:** la revisión la realizó el mismo agente que implementó HOME-001 y TASK-001 (reasignación del PO), por lo que es QA propia, no revisión independiente: sigue pendiente el contraste de Nemo. Informe: `docs/factory/work/UX-REVIEW-001/REVIEW.md`.
+Reviewer Mimo · Después de HOME-001 y TASK-001. **Estado: REVIEW** (2026-11-21) — revisión de UX de Home y Tareas con auditoría objetiva (contraste calculado en el navegador, foco con teclado real, roles y nombres accesibles, trampa de foco del modal, estados y responsive en 3 viewports y 2 temas). Veredicto: **APROBADO CON CORRECCIONES APLICADAS** — 0 ALTA, 4 MEDIA (contraste AA, trampa de foco, restauración de foco y fuga del listener ESC en el modal de widgets) y 3 BAJA, todas corregidas y verificadas (0 fallos de contraste, 0 salidas del modal). Queda 1 pendiente de decisión del PO (token global `--text-muted`). **Nota:** la revisión la realizó el mismo agente que implementó HOME-001 y TASK-001 (reasignación del PO), por lo que es QA propia, no revisión independiente: sigue pendiente el contraste de Nemo. Informe: `docs/factory/work/UX-REVIEW-001/REVIEW.md`.
 
 ## Diseño futuro — no autoriza código
 ### PRJ-PLAN-001
