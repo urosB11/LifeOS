@@ -59,6 +59,12 @@ bloques, multimedia, relaciones semánticas y conexiones entre Cards (MIND-003/0
 (`%TEMP%\opencode\mind-qa`); la base personal nunca se usó. Las capturas quedaron en
 `%TEMP%\opencode\mind-qa\shots`.
 
+**Nota de la verificación final (post-publicación del primer commit):** la última
+pasada de `ruff check app tests` detectó 2 avisos en `tests/test_mind.py` (bloque de
+imports sin ordenar y una variable local asignada sin usar). Se corrigieron en un
+commit posterior, sin tocar el comportamiento de las pruebas ni el código de
+producción; el árbol final queda con `All checks passed` y `163 passed`.
+
 ## Qué queda pendiente
 
 - **Revisión independiente y aceptación del PO** (la entrega queda en REVIEW).

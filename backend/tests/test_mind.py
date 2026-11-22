@@ -7,9 +7,6 @@ Todas las pruebas usan bases temporales (conftest).
 import sqlite3
 
 import pytest
-from sqlalchemy import delete, select, text
-from sqlalchemy.exc import IntegrityError
-
 from app.modules.mind.models import (
     MindCanvas,
     MindCanvasNode,
@@ -17,7 +14,8 @@ from app.modules.mind.models import (
     MindSpaceNote,
 )
 from app.modules.notes.models import Note
-
+from sqlalchemy import delete, select, text
+from sqlalchemy.exc import IntegrityError
 
 # --- Utilidades ------------------------------------------------------------
 
@@ -407,6 +405,7 @@ def test_deleting_a_note_removes_mind_references(client, db):
     space = _create_space(client)
     canvas = _create_canvas(client, space["id"])
     node = _create_card(client, canvas["id"], "Vinculada a la captura")
+    assert node["note_id"]
 
     # La misma Note representada en un Canvas y miembro del Inbox.
     attached = client.post(
