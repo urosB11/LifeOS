@@ -394,22 +394,22 @@ export async function renderHomeView(container, apiBase) {
     const project = projectName(task.project_id);
     let dueChip = "";
     if (!task.due_date) {
-      dueChip = `<span class="home-chip home-chip--muted">Sin fecha</span>`;
+      dueChip = `<span class="chip chip--muted">Sin fecha</span>`;
     } else if (task.due_date < today) {
-      dueChip = `<span class="home-chip home-chip--danger">Vencida el ${task.due_date}</span>`;
+      dueChip = `<span class="chip chip--danger">Vencida el ${task.due_date}</span>`;
     } else if (task.due_date === today) {
-      dueChip = `<span class="home-chip home-chip--warning">Vence hoy</span>`;
+      dueChip = `<span class="chip chip--warning">Vence hoy</span>`;
     } else {
-      dueChip = `<span class="home-chip">Vence el ${task.due_date}</span>`;
+      dueChip = `<span class="chip">Vence el ${task.due_date}</span>`;
     }
     return `
       <li class="home-task">
-        <button type="button" class="home-task__check" data-action="complete-task" data-id="${task.id}"
+        <button type="button" class="check-toggle" data-action="complete-task" data-id="${task.id}"
                 aria-label="Completar ${escapeHtml(task.title)}" title="Completar">&#10003;</button>
         <div class="home-task__body">
           <span class="home-task__title">${escapeHtml(task.title)}</span>
           <span class="home-task__chips">
-            ${project ? `<span class="home-chip">${escapeHtml(project)}</span>` : ""}
+            ${project ? `<span class="chip">${escapeHtml(project)}</span>` : ""}
             ${task.priority ? `<span class="badge badge--priority-${task.priority}">${priorityLabel(task.priority)}</span>` : ""}
             ${dueChip}
           </span>
@@ -458,13 +458,13 @@ export async function renderHomeView(container, apiBase) {
     const meta = [];
     if (project.overdue_count > 0) {
       meta.push(
-        `<span class="home-chip home-chip--danger">${project.overdue_count} ${
+        `<span class="chip chip--danger">${project.overdue_count} ${
           project.overdue_count === 1 ? "tarea vencida" : "tareas vencidas"
         }</span>`
       );
     }
     if (project.next_due_date) {
-      meta.push(`<span class="home-chip">Pr&oacute;ximo vencimiento: ${project.next_due_date}</span>`);
+      meta.push(`<span class="chip">Pr&oacute;ximo vencimiento: ${project.next_due_date}</span>`);
     }
     return `
       <li class="home-project">

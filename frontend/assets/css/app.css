@@ -620,7 +620,7 @@ body {
   border-bottom: none;
 }
 
-.home-task__check {
+.check-toggle {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
@@ -638,17 +638,17 @@ body {
   transition: border-color var(--transition-fast), color var(--transition-fast);
 }
 
-.home-task__check:hover:not(:disabled) {
+.check-toggle:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.home-task__check:focus-visible {
+.check-toggle:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.home-task__check:disabled {
+.check-toggle:disabled {
   opacity: 0.5;
   cursor: progress;
 }
@@ -673,7 +673,7 @@ body {
   flex-wrap: wrap;
 }
 
-.home-chip {
+.chip {
   font-size: 0.75rem;
   color: var(--text-secondary);
   background: var(--surface-hover);
@@ -681,17 +681,17 @@ body {
   padding: 1px 7px;
 }
 
-.home-chip--danger {
+.chip--danger {
   color: var(--danger);
   background: var(--danger-subtle);
 }
 
-.home-chip--warning {
+.chip--warning {
   color: var(--warning);
   background: var(--warning-subtle);
 }
 
-.home-chip--muted {
+.chip--muted {
   color: var(--text-muted);
 }
 
@@ -848,6 +848,190 @@ body {
   margin: 0;
   font-size: 0.875rem;
   color: var(--text);
+}
+
+/* --- Espacio de trabajo de Tareas (TASK-001) ----------------------------- *
+ * Acción compacta (panel desplegable), contadores y filas escaneables.
+ * Reutiliza .chip, .check-toggle, .badge y .btn ya definidos arriba. */
+.task-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: var(--spacing-lg);
+}
+
+.task-panel[hidden] {
+  display: none;
+}
+
+.task-panel__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.task-panel .form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.task-panel .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.task-panel .form-group:first-child {
+  flex: 2 1 260px;
+}
+
+.task-panel input[type="text"],
+.task-panel input[type="date"],
+.task-panel select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9375rem;
+}
+
+.task-panel input[type="text"]:focus-visible,
+.task-panel input[type="date"]:focus-visible,
+.task-panel select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.task-panel__error {
+  font-size: 0.875rem;
+  color: var(--danger);
+  margin-left: 4px;
+}
+
+.task-panel__error:empty {
+  display: none;
+}
+
+/* Contadores de la vista */
+.tasks-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.tasks-summary__item strong {
+  color: var(--text);
+  font-size: 1.05rem;
+  margin-right: 3px;
+}
+
+.tasks-summary__item--danger strong {
+  color: var(--danger);
+}
+
+.tasks-summary__filter {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* Filas de tareas */
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.task-row:last-child {
+  border-bottom: none;
+}
+
+.task-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.task-row__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.task-row--completed .task-row__title {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+}
+
+.task-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-row__description {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.task-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.task-row--completed .check-toggle {
+  background: var(--success);
+  border-color: var(--success);
+  color: #FFFFFF;
+}
+
+.chip--link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.chip--link:hover {
+  text-decoration: underline;
+}
+
+/* La acción destructiva queda separada de las frecuentes: se distingue por
+ * color de texto y borde, sin competir con ellas visualmente. */
+.task-row__delete {
+  color: var(--danger);
+  background: transparent;
+  border: 1px solid var(--danger-subtle);
+}
+
+.task-row__delete:hover {
+  background: var(--danger-subtle);
 }
 
 /* --- Tema oscuro: los tokens viven en vars.css (Fase 8A) --- */
@@ -1425,6 +1609,34 @@ button.wk-cell {
 
   .wk-row {
     gap: 3px;
+  }
+
+  /* Tareas: la fila pasa a tipo tarjeta (acciones en su propia línea) */
+  .task-row {
+    flex-wrap: wrap;
+  }
+
+  .task-row__actions {
+    width: 100%;
+    justify-content: flex-end;
+    padding-left: 32px;
+  }
+
+  .tasks-summary {
+    gap: 12px;
+  }
+
+  /* Panel de tarea en una sola columna: sin bases de altura ni alineación
+   * cruzada que corran los campos a la derecha. */
+  .task-panel .form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .task-panel .form-group,
+  .task-panel .form-group:first-child {
+    flex: 0 0 auto;
+    width: 100%;
   }
 
   .toast-container {
