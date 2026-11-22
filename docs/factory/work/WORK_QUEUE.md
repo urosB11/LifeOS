@@ -38,8 +38,8 @@ Prioridad P1 · Developer Nemo (ejecución reasignada por el PO a Mimo) · Secue
 La etapa aplica la dirección de VISION.md y docs/product/UX_DIRECTION.md: interfaz útil y contextual, no CRUD administrativo ni dashboard decorativo. Mantiene el stack y la fuente de verdad actuales.
 
 ### RESPONSIVE-002 — Corregir overflow horizontal móvil
-Prioridad P0 · Developer Mimo · Estado: READY · Spec: RESPONSIVE-002/SPEC.md · Sin dependencia.  
-Reproducir y corregir el desbordamiento horizontal identificado en STAB-001 en Projects, Habits y Notes. No ocultarlo con overflow-x:hidden ni recortar contenido. Verificar todas las rutas principales y navegación en 1440×900, 768×1024 y 390×844. Mantener el token global --text-muted fuera de alcance hasta decisión del PO.
+Prioridad P0 · Developer Mimo · **Estado: REVIEW** (2026-11-22) · Spec: RESPONSIVE-002/SPEC.md · Sin dependencia.
+Se confirmó que `.main` podía crecer a su ancho intrínseco dentro de `.app-content`; al fijar `width: 100%` y `min-width: 0`, Projects, detalle, Habits y Notes dejaron de ampliar la página. QA detectó además que el filtro de proyecto de Tareas heredaba el ancho de una opción larga; los `select` de `.filters-bar` ahora quedan limitados a su contenedor. Sin `overflow-x:hidden` ni recorte de contenido. Verificación browser en 1440×900, 768×1024 y 390×844, siete rutas y ambos temas: sin overflow de página; las tablas conservan scroll interno en `.table-wrap`. pytest 140/140, Ruff, node --check, smoke HTTP/API y `git diff --check` OK. Handoff: RESPONSIVE-002/HANDOFF.md. Pendiente revisión/aceptación del PO.
 
 ### UX-HOME-002 — Claridad de Home y captura contextual
 Prioridad P1 · Developer Mimo · Estado: READY · Depende de RESPONSIVE-002 · Spec: UX-HOME-002/SPEC.md.  

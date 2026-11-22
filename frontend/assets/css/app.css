@@ -169,6 +169,8 @@ body {
 
 .main {
   padding: var(--spacing);
+  width: 100%;
+  min-width: 0;
   max-width: var(--content-max-width);
   margin: 0 auto;
   flex: 1;
@@ -1327,9 +1329,8 @@ button.wk-cell:focus-visible {
   gap: var(--spacing);
 }
 
-/* La tarjeta de calendarios nunca excede el ancho de la ventana: evita que la
-   grilla multi-hábito sea la causa del overflow horizontal de página mientras
-   .main conserve su ancho intrínseco (defecto preexistente, tarea aparte). */
+/* La grilla de calendarios no debe exceder el viewport; .main limita el
+   ancho disponible para el contenido de cada vista. */
 .habits-calendar {
   max-width: calc(100vw - 2 * var(--spacing));
 }
