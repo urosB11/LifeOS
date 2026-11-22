@@ -3,13 +3,25 @@
 **Proyecto:** LifeOS
 **Tarea:** MIND-001 — Diseño funcional y técnico de Mind
 **Estado:** PLANNING — NO AUTORIZA IMPLEMENTACIÓN
-**Versión:** 0.1 (borrador para aprobación del PO)
+**Versión:** 0.2 (auditoría base; roadmap vigente en MIND_ROADMAP.md)
 **Fecha:** 21 de noviembre de 2026
 **Rama:** planning/mind-001
 **Relacionado con:** `PRODUCT_MODEL.md`, `UX_DIRECTION.md`, `AI_AGENT_MODEL.md`, `METRICS_CATALOG.md`, `ARCHITECTURE.md`, `DATABASE.md`, `SECURITY.md`, `ROADMAP.md`, `AGENTS.md`
 **Referencias leídas (solo lectura, NO fusionadas):** `origin/product/mind-foundation` → `docs/product/MIND_PRODUCT_MODEL.md`, `docs/product/ORBES_MODEL.md`, `docs/factory/work/MIND-001/DESIGN_TASK.md`
 
 > Este documento es una **propuesta de diseño** para discusión y aprobación del Product Owner. **No autoriza código, migraciones, endpoints ni cambios al runtime.** Distingue explícitamente HECHOS, PROPUESTAS, SUPUESTOS y PREGUNTAS.
+
+> **ACTUALIZACIÓN DEL PRODUCT OWNER — 22 de noviembre de 2026**
+>
+> Este archivo conserva la auditoría técnica y el primer borrador de diseño MIND-001. Para la visión funcional vigente, la prioridad de producto, el orden de entregas y la primera especificación ejecutable prevalecen estos documentos:
+> - `docs/product/MIND_PRODUCT_MODEL.md`
+> - `docs/product/ORBES_MODEL.md`
+> - `docs/product/MIND_ROADMAP.md`
+> - `docs/factory/work/MIND_WORK_QUEUE.md`
+> - `docs/factory/work/MIND-002/SPEC.md`
+>
+> Las secciones F–J y los ADR del borrador 0.1 son antecedentes y quedan sustituidos cuando contradigan esa planificación. **Mind debe ser funcional sin IA. Los Orbes no forman parte del MVP ni de las primeras entregas.** La auditoría de arquitectura de la sección A es un corte histórico: antes de implementar, verificar el HEAD y el estado real de la rama de producto.
+
 
 ## Convención de estados en este documento
 
@@ -714,4 +726,4 @@ Principios (HECHOS de `ORBES_MODEL.md` y `AI_AGENT_MODEL.md`): Orbes son sesione
 
 ---
 
-**Estado:** borrador PLANNING. **No implementa nada.** Pendiente de discusión y aprobación del Product Owner antes de convertir §J en tareas READY.
+**Estado:** PLANNING — documento de auditoría base. El roadmap vigente y la tarea inicial están definidos en `MIND_ROADMAP.md` y `MIND-002/SPEC.md`. Este archivo no autoriza a implementar entregas distintas de las que estén READY en `MIND_WORK_QUEUE.md`.
