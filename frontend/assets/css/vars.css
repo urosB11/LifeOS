@@ -24,6 +24,9 @@
   --success-subtle: #1A2E20;
   --warning: #D8C070;
   --warning-subtle: #3D3722;
+  /* Variante de --warning legible como texto sobre --warning-subtle (AA).
+   * En claro el tono base no alcanza 4.5:1 sobre su fondo sutil. */
+  --warning-text: #D8C070;
   --info: #5B9BD5;
   --info-subtle: #1A2433;
 
@@ -91,6 +94,9 @@ body.theme-light {
   --success-subtle: #E9F3EC;
   --warning: #9A7D0A;
   --warning-subtle: #FBF3DC;
+  /* Tono de advertencia legible como texto sobre --warning-subtle (AA 4.5:1);
+   * --warning se mantiene para bordes y acentos. */
+  --warning-text: #7A6206;
   --info: #2E5E8C;
   --info-subtle: #E8F0F8;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -118,6 +124,7 @@ body.theme-dark {
   --success-subtle: #1A2E20;
   --warning: #D8C070;
   --warning-subtle: #3D3722;
+  --warning-text: #D8C070;
   --info: #5B9BD5;
   --info-subtle: #1A2433;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);

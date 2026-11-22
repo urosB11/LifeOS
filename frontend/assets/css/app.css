@@ -335,7 +335,7 @@ body {
 
 .badge--status {
   background: var(--accent-subtle);
-  color: var(--accent);
+  color: var(--accent-hover);
 }
 
 .badge--priority-high {
@@ -345,7 +345,7 @@ body {
 
 .badge--priority-normal {
   background: var(--warning-subtle);
-  color: var(--warning);
+  color: var(--warning-text);
 }
 
 .badge--priority-low {
@@ -628,7 +628,9 @@ body {
   border-radius: 50%;
   border: 1.5px solid var(--border);
   background: transparent;
-  color: transparent;
+  /* La marca de completada se ve siempre (no solo al pasar el mouse):
+   * un círculo vacío no comunica la acción disponible. */
+  color: var(--text-secondary);
   font-size: 0.6875rem;
   line-height: 1;
   cursor: pointer;
@@ -676,7 +678,9 @@ body {
 .chip {
   font-size: 0.75rem;
   color: var(--text-secondary);
-  background: var(--surface-hover);
+  /* --surface-raised en lugar de --surface-hover: en tema claro, el texto
+   * secundario sobre --surface-hover queda en 4.43:1 (por debajo de AA). */
+  background: var(--surface-raised);
   border-radius: var(--radius-sm);
   padding: 1px 7px;
 }
@@ -687,12 +691,12 @@ body {
 }
 
 .chip--warning {
-  color: var(--warning);
+  color: var(--warning-text);
   background: var(--warning-subtle);
 }
 
 .chip--muted {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* Proyectos en marcha */
@@ -742,7 +746,7 @@ body {
 }
 
 .home-project__label {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 /* Hábitos de hoy */
@@ -830,7 +834,7 @@ body {
 .home-more {
   margin: 10px 0 0;
   font-size: 0.8125rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .home-error {

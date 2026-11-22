@@ -45,10 +45,10 @@ export async function renderHomeView(container, apiBase) {
       <div>
         <h1>Home</h1>
         <p class="subtitle" id="home-date">&nbsp;</p>
-        <p class="home-context" id="home-context"></p>
+        <p class="home-context" id="home-context" aria-live="polite"></p>
       </div>
       <button class="btn btn--secondary" id="widgets-edit-btn">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;" aria-hidden="true" focusable="false">
           <circle cx="8" cy="8" r="2"/>
           <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.3 3.3l1.4 1.4M11.3 11.3l1.4 1.4M12.7 3.3l-1.4 1.4M4.7 11.3l-1.4 1.4"/>
         </svg>
@@ -513,7 +513,7 @@ export async function renderHomeView(container, apiBase) {
           <section class="home-habits" aria-labelledby="home-habits-title">
             <div class="home-section__head">
               <h2 class="home-section__title" id="home-habits-title">H&aacute;bitos de hoy</h2>
-              <span class="home-section__summary">${done} de ${items.length} cumplidos</span>
+              <span class="home-section__summary" aria-live="polite">${done} de ${items.length} cumplidos</span>
             </div>
             ${
               items.length
@@ -730,7 +730,7 @@ export async function renderHomeView(container, apiBase) {
       <section class="home-habits" aria-labelledby="home-habits-title">
         <div class="home-section__head">
           <h2 class="home-section__title" id="home-habits-title">H&aacute;bitos de hoy</h2>
-          <span class="home-section__summary">${done} de ${items.length} cumplidos</span>
+          <span class="home-section__summary" aria-live="polite">${done} de ${items.length} cumplidos</span>
         </div>
         ${list}
         <p class="home-section__foot"><a class="home-section__link" href="#/habits">Abrir h&aacute;bitos</a></p>
@@ -895,6 +895,8 @@ export async function renderHomeView(container, apiBase) {
 
   // --- Configuración de widgets (modal) -------------------------------------
   function openConfig() {
+    // Elemento que tenía el foco antes de abrir: se restaura al cerrar.
+    const previouslyFocused = document.activeElement;
     const overlay = document.createElement("div");
     overlay.className = "modal-overlay";
     overlay.innerHTML = `
@@ -913,6 +915,41 @@ export async function renderHomeView(container, apiBase) {
     const configEl = overlay.querySelector("#widgets-config");
     const saveBtn = overlay.querySelector("#widgets-save-btn");
     const cancelBtn = overlay.querySelector("#widgets-cancel-btn");
+
+    // Cierre único: quita el overlay, el listener de teclado y devuelve el
+    // foco a donde estaba (así el teclado no pierde el lugar).
+    function close() {
+      document.removeEventListener("keydown", onKey, true);
+      overlay.remove();
+      if (previouslyFocused && previouslyFocused.focus && previouslyFocused.isConnected) {
+        previouslyFocused.focus();
+      }
+    }
+
+    // Teclado: ESC cierra y Tab queda atrapado dentro del modal (mismo patrón
+    // que el modal de confirmación de app.js).
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = overlay.querySelectorAll(
+        "button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex='-1'])"
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
 
     // Renderizar filas de configuración
     const sorted = [...widgets].sort((a, b) => a.position - b.position);
@@ -982,7 +1019,7 @@ export async function renderHomeView(container, apiBase) {
       });
 
       if (res.ok) {
-        overlay.remove();
+        close();
         showToast("Preferencias guardadas", "success");
         await load();
       } else {
@@ -992,19 +1029,10 @@ export async function renderHomeView(container, apiBase) {
     });
 
     // Cancelar
-    cancelBtn.addEventListener("click", () => overlay.remove());
+    cancelBtn.addEventListener("click", close);
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) overlay.remove();
+      if (e.target === overlay) close();
     });
-
-    // Escape para cerrar
-    const onKey = (e) => {
-      if (e.key === "Escape") {
-        overlay.remove();
-        document.removeEventListener("keydown", onKey);
-      }
-    };
-    document.addEventListener("keydown", onKey);
 
     // Focus en el primer checkbox
     const firstCheckbox = configEl.querySelector("input[type=checkbox]");
