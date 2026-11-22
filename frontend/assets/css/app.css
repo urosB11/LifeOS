@@ -1102,6 +1102,63 @@ body {
   outline-offset: 4px;
 }
 
+/* --- Formularios progresivos y edición de Notas (UX-MODULES-002) -------- */
+.notes-section-header {
+  margin-top: 32px;
+}
+
+#proj-new-btn,
+#note-new-btn,
+#tag-new-btn,
+#projects-list .btn--sm,
+#notes-list .btn--sm,
+#tags-list .btn--sm,
+#proj-create-panel .btn,
+#note-create-panel .btn,
+#tag-create-panel .btn,
+.notes-modal__actions .btn {
+  min-height: 44px;
+}
+
+.notes-modal {
+  max-width: 680px;
+  max-height: calc(100vh - 2 * var(--spacing));
+  overflow-y: auto;
+}
+
+.notes-modal__content {
+  max-height: 50vh;
+  margin: 16px 0;
+  padding: 16px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notes-modal__tags {
+  margin-bottom: 16px;
+  font-size: 0.875rem;
+}
+
+.notes-modal__error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 0.875rem;
+}
+
+.notes-modal__error:empty {
+  display: none;
+}
+
+.notes-modal .form-group textarea {
+  min-height: 220px;
+  resize: vertical;
+}
+
 /* --- Espacio de trabajo de Tareas (TASK-001) ----------------------------- *
  * Acción compacta (panel desplegable), contadores y filas escaneables.
  * Reutiliza .chip, .check-toggle, .badge y .btn ya definidos arriba. */

@@ -50,8 +50,8 @@ Prioridad P1 · Developer Mimo · **Estado: REVIEW** (2026-11-22) · Depende de 
 Home ahora ofrece personalización explícita con arrastre por asa, controles accesibles mover arriba/abajo, visibilidad independiente y guardar/cancelar; Settings ya no duplica el editor. Solo se reordenan widgets dentro de sus zonas actuales y Captura rápida se mueve como grupo. Sin cambios de API, modelo, migración ni dependencias. QA propia: 141 pytest, Ruff, node --check, persistencia/error/reintento, teclado y matriz visual en 1440×900, 768×1024 y 390×844 en ambos temas sin overflow. Handoff: UX-WIDGETS-002/HANDOFF.md. Pendiente revisión independiente y aceptación del PO.
 
 ### UX-MODULES-002 — Formularios progresivos y edición de notas
-Prioridad P1 · Developer Mimo · Estado: READY · Depende de UX-WIDGETS-002 · Spec: UX-MODULES-002/SPEC.md.  
-Colapsar por defecto los formularios permanentes de creación de Projects y Notes; conservar listas visibles; hacer progresivo el alta de etiquetas; habilitar edición de título y contenido de notas con PATCH actual. No rehacer Tasks, que ya tiene panel compacto, ni ocultar acciones frecuentes de Hábitos.
+Prioridad P1 · Developer Mimo · **Estado: REVIEW** (2026-11-22) · Depende de UX-WIDGETS-002 · Spec: UX-MODULES-002/SPEC.md.
+Projects y Notes abren los formularios de alta bajo demanda sin ocultar sus listas; el alta de etiquetas también es progresiva. Notes permite editar título y contenido con PATCH, conserva borradores ante error y deja intactas las relaciones no editadas. Los datos se mantienen como texto seguro. Sin cambios de API, modelo, migraciones ni dependencias. QA propia: pytest (141), Ruff, node --check, smoke API y flujos interactivos; matriz visual en 1440×900, 768×1024 y 390×844, ambos temas, sin overflow horizontal. Handoff: UX-MODULES-002/HANDOFF.md. Pendiente revisión independiente y aceptación del PO.
 
 ### UX-REVIEW-002 — Revisión UX independiente
 Prioridad P1 · Reviewer distinto del Developer (Copilot UX preferente) · Estado: PLANNING · Spec: UX-REVIEW-002/SPEC.md.  
