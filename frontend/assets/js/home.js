@@ -61,7 +61,7 @@ export async function renderHomeView(container, apiBase) {
       <div>
         <h1>Home</h1>
         <p class="subtitle" id="home-date">&nbsp;</p>
-        <p class="home-context" id="home-context" aria-live="polite"></p>
+        <p class="home-context" id="home-context"></p>
       </div>
       <button class="btn btn--secondary" id="widgets-edit-btn" aria-pressed="false">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;" aria-hidden="true" focusable="false">
@@ -1587,26 +1587,43 @@ export async function renderHomeView(container, apiBase) {
     const state = dragState;
     if (!state || !state.started) return;
     clearDropHighlights();
-    const pointed = document.elementFromPoint(event.clientX, event.clientY);
-    if (!pointed || !homeGridEl.contains(pointed)) {
-      state.invalid = true;
-      homeGridEl.classList.add("home-drop-forbidden");
-      announceWidget("Suelta la sección dentro de la cuadrícula.");
+    // El placeholder ocupa una celda del grid con el mismo tamaño de la
+    // tarjeta arrastrada: al insertarse desplaza el resto de tarjetas. Por eso
+    // el destino se resuelve sobre la geometría capturada al iniciar el
+    // arrastre; así la sección cae donde señala la previsualización y no al
+    // final de la cuadrícula.
+    const pointerX = event.clientX + window.scrollX;
+    const pointerY = event.clientY + window.scrollY;
+    const targetCard = [...state.layout.entries()].find(([card, rect]) => {
+      if (card === state.source) return false;
+      return pointerX >= rect.left && pointerX <= rect.right
+        && pointerY >= rect.top && pointerY <= rect.bottom;
+    });
+
+    if (!targetCard) {
+      // Sin tarjeta bajo el puntero: si además está fuera de la cuadrícula,
+      // soltar allí no es válido; si está en una zona vacía, se conserva la
+      // previsualización ya mostrada.
+      const gridRect = homeGridEl.getBoundingClientRect();
+      const insideGrid = event.clientX >= gridRect.left && event.clientX <= gridRect.right
+        && event.clientY >= gridRect.top && event.clientY <= gridRect.bottom;
+      if (!insideGrid) {
+        state.invalid = true;
+        homeGridEl.classList.add("home-drop-forbidden");
+        announceWidget("Suelta la sección dentro de la cuadrícula.");
+        return;
+      }
+      state.invalid = false;
       return;
     }
 
     state.invalid = false;
-    const targetCard = pointed.closest(".home-widget-card");
-    if (targetCard && targetCard !== state.source) {
-      targetCard.classList.add("home-widget-card--drop-target");
-      const rect = targetCard.getBoundingClientRect();
-      const verticalMidpoint = rect.top + rect.height / 2;
-      const before = event.clientY < verticalMidpoint
-        || (event.clientY < rect.bottom && event.clientX < rect.left + rect.width / 2);
-      homeGridEl.insertBefore(state.placeholder, before ? targetCard : targetCard.nextSibling);
-    } else {
-      homeGridEl.appendChild(state.placeholder);
-    }
+    const [card, rect] = targetCard;
+    card.classList.add("home-widget-card--drop-target");
+    const verticalMidpoint = rect.top + rect.height / 2;
+    const before = pointerY < verticalMidpoint
+      || (pointerY < rect.bottom && pointerX < rect.left + rect.width / 2);
+    homeGridEl.insertBefore(state.placeholder, before ? card : card.nextSibling);
     announceWidget("Suelta la sección para cambiar su posición.");
   }
 
@@ -1632,6 +1649,23 @@ export async function renderHomeView(container, apiBase) {
       invalid: false,
       initialOrder: Array.from(homeGridEl.querySelectorAll(".home-widget-card"))
         .map((card) => card.dataset.widgetGroup),
+      // Geometría de las tarjetas en coordenadas de documento, capturada antes
+      // de insertar el placeholder. El placeholder es un elemento más del grid
+      // y desplaza el resto de tarjetas, así que resolver el destino con las
+      // medidas en vivo desfasaría el puntero respecto a lo que se ve.
+      layout: new Map(
+        Array.from(homeGridEl.querySelectorAll(".home-widget-card")).map((card) => {
+          const rect = card.getBoundingClientRect();
+          return [card, {
+            left: rect.left + window.scrollX,
+            top: rect.top + window.scrollY,
+            right: rect.right + window.scrollX,
+            bottom: rect.bottom + window.scrollY,
+            width: rect.width,
+            height: rect.height,
+          }];
+        })
+      ),
     };
     handle.setPointerCapture(event.pointerId);
     event.preventDefault();
