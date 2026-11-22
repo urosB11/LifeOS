@@ -489,6 +489,10 @@ body {
   color: var(--text-secondary);
 }
 
+.home-context__retry {
+  margin-left: 8px;
+}
+
 .home-section__head {
   display: flex;
   align-items: baseline;
@@ -780,6 +784,12 @@ body {
 }
 
 /* Captura rápida */
+.home-capture__modes {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 .home-capture__form {
   display: flex;
   flex-direction: column;
@@ -794,7 +804,8 @@ body {
 }
 
 .home-capture__form input[type="text"],
-.home-capture__form select {
+.home-capture__form select,
+.home-capture__form textarea {
   width: 100%;
   padding: 7px 10px;
   border: 1px solid var(--border);
@@ -806,9 +817,14 @@ body {
 }
 
 .home-capture__form input[type="text"]:focus-visible,
-.home-capture__form select:focus-visible {
+.home-capture__form select:focus-visible,
+.home-capture__form textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+.home-capture__form textarea {
+  resize: vertical;
 }
 
 .home-capture__form button {
@@ -854,6 +870,37 @@ body {
   margin: 0;
   font-size: 0.875rem;
   color: var(--text);
+}
+
+/* Aviso de preferencias no cargadas y carga por bloque (UX-01 §5):
+ * el fallo del catálogo no deja Home en blanco y ofrece reintento. */
+.home-prefs-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: var(--spacing);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius);
+  background: var(--warning-subtle);
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.home-prefs-notice[hidden] {
+  display: none;
+}
+
+.home-prefs-notice__text {
+  min-width: 0;
+}
+
+.home-loading {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
 }
 
 /* --- Espacio de trabajo de Tareas (TASK-001) ----------------------------- *
