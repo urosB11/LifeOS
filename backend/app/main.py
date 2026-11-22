@@ -18,12 +18,14 @@ from app.api.v1 import (
     export,
     habits,
     health,
+    mind,
     notes,
     projects,
     tasks,
 )
 from app.api.v1 import settings as settings_api
 from app.core.config import get_settings
+from app.modules.mind.service import MindConflictError, MindNotFoundError
 
 settings = get_settings()
 
@@ -40,11 +42,26 @@ app.include_router(projects.router, prefix=settings.api_v1_prefix)
 app.include_router(tasks.router, prefix=settings.api_v1_prefix)
 app.include_router(notes.router, prefix=settings.api_v1_prefix)
 app.include_router(habits.router, prefix=settings.api_v1_prefix)
+app.include_router(mind.router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard.router, prefix=settings.api_v1_prefix)
 app.include_router(settings_api.router, prefix=settings.api_v1_prefix)
 app.include_router(analytics.router, prefix=settings.api_v1_prefix)
 app.include_router(export.router, prefix=settings.api_v1_prefix)
 app.include_router(backup.router, prefix=settings.api_v1_prefix)
+
+
+# --- Errores de dominio de Mind (MIND-002) --------------------------------
+@app.exception_handler(MindNotFoundError)
+async def mind_not_found_handler(request: Request, exc: MindNotFoundError):
+    """Recurso de Mind inexistente → 404."""
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(MindConflictError)
+async def mind_conflict_handler(request: Request, exc: MindConflictError):
+    """Operación de Mind no permitida en el estado actual → 409."""
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
 
 # --- Frontend static files (same origin, no CORS) ------------------------
 _frontend_dir = Path(__file__).resolve().parents[2] / "frontend"

@@ -18,6 +18,12 @@ from app.db.session import engine
 from app.modules.dashboard.models import WidgetPreference
 from app.modules.dashboard.repository import UserPreferenceRepository
 from app.modules.habits.models import Habit, HabitEntry
+from app.modules.mind.models import (
+    MindCanvas,
+    MindCanvasNode,
+    MindSpace,
+    MindSpaceNote,
+)
 from app.modules.notes.models import Note, NoteProjectLink, NoteTag, NoteTaskLink, Tag
 from app.modules.projects.models import Project
 from app.modules.tasks.models import Task
@@ -48,6 +54,10 @@ def build_export(db) -> dict[str, Any]:
         "note_tags": list_table(NoteTag),
         "habits": list_table(Habit),
         "habit_entries": list_table(HabitEntry),
+        "mind_spaces": list_table(MindSpace),
+        "mind_canvases": list_table(MindCanvas),
+        "mind_space_notes": list_table(MindSpaceNote),
+        "mind_canvas_nodes": list_table(MindCanvasNode),
         "widget_preferences": list_table(WidgetPreference),
         "user_preferences": [
             {"key": p.key, "value": p.value, "updated_at": p.updated_at}

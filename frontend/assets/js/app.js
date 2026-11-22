@@ -6,6 +6,12 @@ import { renderNotesView } from "./notes.js";
 import { renderHabitsView } from "./habits.js";
 import { renderHomeView } from "./home.js";
 import { renderSettingsView } from "./settings.js";
+import {
+  renderMindHomeView,
+  renderMindInboxView,
+  renderMindSpaceView,
+} from "./mind.js";
+import { renderMindCanvasView } from "./mind-canvas.js";
 
 const API_BASE = "/api/v1";
 const statusEl = document.getElementById("status");
@@ -186,7 +192,13 @@ async function route() {
   const hash = location.hash || "#/";
   // "#/home" es un alias legible de "#/" (el dashboard real)
   // "#/projects/:id" mantiene activo el enlace de Proyectos
-  const navHash = hash.startsWith("#/projects/") ? "#/projects" : hash;
+  // "#/mind/..." mantiene activo el enlace de Mind
+  let navHash = hash;
+  if (hash.startsWith("#/projects/")) {
+    navHash = "#/projects";
+  } else if (hash.startsWith("#/mind")) {
+    navHash = "#/mind";
+  }
   setActiveNav(navHash === "#/home" ? "#/" : navHash);
 
   if (hash === "#/" || hash === "" || hash === "#/home") {
@@ -202,6 +214,16 @@ async function route() {
     await renderTasksView(viewEl, API_BASE);
   } else if (hash === "#/notes") {
     await renderNotesView(viewEl, API_BASE);
+  } else if (hash === "#/mind") {
+    await renderMindHomeView(viewEl, API_BASE);
+  } else if (hash === "#/mind/inbox") {
+    await renderMindInboxView(viewEl, API_BASE);
+  } else if (hash.startsWith("#/mind/spaces/")) {
+    const spaceId = hash.replace("#/mind/spaces/", "");
+    await renderMindSpaceView(viewEl, API_BASE, spaceId);
+  } else if (hash.startsWith("#/mind/canvases/")) {
+    const canvasId = hash.replace("#/mind/canvases/", "");
+    await renderMindCanvasView(viewEl, API_BASE, canvasId);
   } else if (hash === "#/habits") {
     await renderHabitsView(viewEl, API_BASE);
   } else if (hash === "#/settings") {

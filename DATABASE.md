@@ -1,9 +1,9 @@
 # Life OS — Diseño de base de datos
 
-**Estado:** línea base de datos del MVP 0.1 y de la Fase 7 (Hábitos)
-**Versión:** 0.4
-**Fecha:** 18 de noviembre de 2026
-**Relacionado con:** `VISION.md`, `REQUIREMENTS.md`, `ARCHITECTURE.md` y `SECURITY.md`
+**Estado:** línea base de datos del MVP 0.1, Fase 7 (Hábitos) y MIND-002 (Mind core)
+**Versión:** 0.5
+**Fecha:** 22 de noviembre de 2026
+**Relacionado con:** `VISION.md`, `REQUIREMENTS.md`, `ARCHITECTURE.md`, `SECURITY.md`, `docs/factory/work/MIND-002/SPEC.md`
 
 > Este documento define el modelo lógico del MVP. La implementación SQL concreta se realizará con SQLAlchemy 2.x y migraciones Alembic. Las tablas de dominio son la fuente de verdad; `activity_events` conserva historial complementario, no reemplaza el estado actual.
 
@@ -27,8 +27,12 @@ Conservar tareas, proyectos, notas, etiquetas, hábitos, sus registros diarios, 
 | `activity_events` | Historial de cambios relevantes. |
 | `habits` | Hábitos con frecuencia, estado y objetivo opcional (Fase 7). |
 | `habit_entries` | Registro diario de un hábito por fecha (Fase 7). |
+| `mind_spaces` | Contextos de trabajo de Mind y el Inbox único (MIND-002). |
+| `mind_canvases` | Superficies visuales dentro de un Space (MIND-002). |
+| `mind_space_notes` | Membresía de una Note en un Space (capturas del Inbox). |
+| `mind_canvas_nodes` | Instancia visual de una Note sobre un Canvas (posición y tamaño). |
 
-No crear tablas para Work, Business, Finance, integraciones o agentes hasta que sus requisitos estén definidos. Mind se cubre por ahora con notas y hábitos; áreas sin requisitos definidos no crean tablas vacías.
+No crear tablas para Work, Business, Finance, integraciones o agentes hasta que sus requisitos estén definidos. Mind (MIND-002) cubre Spaces, Inbox, Canvases y Cards simples con su propio modelo; las relaciones semánticas, los documentos por bloques y los Orbes siguen sin tablas hasta que exista su SPEC.
 
 ## 3. Convenciones
 
@@ -54,6 +58,8 @@ Las tablas de unión usan claves primarias compuestas cuando corresponde. `widge
 - Habit status: `active`, `paused`, `archived`.
 - Habit frequency type: `daily`, `weekly_days`.
 - Habit entry status: `pending`, `completed`, `skipped`.
+- Mind space status: `active`, `archived`.
+- Mind canvas status: `active`, `archived`.
 - Guardar valores estables en inglés en la base; localizar etiquetas solo en interfaz.
 - No almacenar valores calculables salvo que sean necesarios para preservar un evento histórico.
 
@@ -68,12 +74,16 @@ notes N ──────────── N tags      (note_tags)
 
 habits 1 ─────────── N habit_entries
 
+mind_spaces 1 ─────── N mind_canvases
+mind_spaces N ──────── N notes      (mind_space_notes)
+mind_canvases N ────── N notes      (mind_canvas_nodes)
+
 widget_preferences  (catálogo de widgets definido en código)
 user_preferences    (preferencias simples)
 activity_events     (historial complementario)
 ```
 
-Una nota puede tener cero vínculos y cero etiquetas. No se fuerza una clasificación. Una nota puede asociarse con varios proyectos y varias tareas, evitando duplicar contenido. Un hábito puede tener cero registros (aún no se registró ningún día).
+Una nota puede tener cero vínculos y cero etiquetas. No se fuerza una clasificación. Una nota puede asociarse con varios proyectos y varias tareas, evitando duplicar contenido. Un hábito puede tener cero registros (aún no se registró ningún día). En Mind, una misma Note puede ser miembro de varios Spaces y representarse en varios Canvases: el contenido canónico nunca se duplica.
 
 ## 5. Tablas
 
@@ -253,6 +263,63 @@ Restricción `UNIQUE(habit_id, entry_date)`: un solo registro por hábito y fech
 
 Los registros existentes se conservan con su fecha y estado aunque después cambie la frecuencia o la configuración del hábito.
 
+### 5.13 `mind_spaces`
+
+| Campo | Tipo | Regla |
+|---|---|---|
+| `id` | TEXT | PK UUIDv4. |
+| `name` | TEXT | Obligatorio, no vacío después de normalizar espacios. |
+| `description` | TEXT | Opcional. |
+| `is_inbox` | INTEGER | Boolean; `1` marca el Inbox único de la instalación. |
+| `status` | TEXT | `active` o `archived`; default `active`. |
+| `archived_at` | TEXT | Nullable; instante del archivado. |
+| `created_at` | TEXT | Instante UTC obligatorio. |
+| `updated_at` | TEXT | Instante UTC obligatorio. |
+
+Restricción `UNIQUE` parcial sobre `is_inbox` con predicado `is_inbox = 1`: la base admite como máximo un Inbox. La existencia se garantiza en el servicio (`ensure_inbox`, idempotente y transaccional) en el bootstrap de cada petición de Mind. El Inbox no se renombra, archiva ni elimina desde la interfaz; archivarlo está prohibido también en el servicio.
+
+### 5.14 `mind_canvases`
+
+| Campo | Tipo | Regla |
+|---|---|---|
+| `id` | TEXT | PK UUIDv4. |
+| `space_id` | TEXT | FK a `mind_spaces.id`, `ON DELETE CASCADE`. |
+| `title` | TEXT | Obligatorio, no vacío después de normalizar espacios. |
+| `description` | TEXT | Opcional. |
+| `status` | TEXT | `active` o `archived`; default `active`. |
+| `archived_at` | TEXT | Nullable; instante del archivado. |
+| `created_at` | TEXT | Instante UTC obligatorio. |
+| `updated_at` | TEXT | Instante UTC obligatorio. |
+
+Un Canvas archivado conserva sus nodos y el contenido de las Notes referenciadas. No existe borrado físico de Canvases en MIND-002: el archivado es la operación preferida.
+
+### 5.15 `mind_space_notes`
+
+| Campo | Tipo | Regla |
+|---|---|---|
+| `space_id` | TEXT | PK (compuesta), FK a `mind_spaces.id`, `ON DELETE CASCADE`. |
+| `note_id` | TEXT | PK (compuesta), FK a `notes.id`, `ON DELETE CASCADE`. |
+| `created_at` | TEXT | Instante UTC obligatorio. |
+
+Membresía Note↔Space. Las capturas del Inbox son Notes con una fila en esta tabla. Eliminar la Note elimina su membresía y sus referencias visuales; eliminar o mover un Space nunca borra Notes.
+
+### 5.16 `mind_canvas_nodes`
+
+| Campo | Tipo | Regla |
+|---|---|---|
+| `id` | TEXT | PK UUIDv4. |
+| `canvas_id` | TEXT | FK a `mind_canvases.id`, `ON DELETE CASCADE`. |
+| `note_id` | TEXT | FK a `notes.id`, `ON DELETE CASCADE`. |
+| `x` | REAL | Coordenada X en el mundo; independiente del viewport y del zoom. |
+| `y` | REAL | Coordenada Y en el mundo; independiente del viewport y del zoom. |
+| `width` | REAL | Nullable; tamaño inicial. `NULL` = tamaño por defecto. |
+| `height` | REAL | Nullable; tamaño inicial. `NULL` = tamaño por defecto. |
+| `z_index` | INTEGER | Orden visual, no negativo. |
+| `created_at` | TEXT | Instante UTC obligatorio. |
+| `updated_at` | TEXT | Instante UTC obligatorio. |
+
+Restricción `UNIQUE(canvas_id, note_id)`: una Note tiene como máximo una representación por Canvas, pero puede representarse en varios Canvases. El nodo guarda solo la instancia visual; el texto vive en `notes`. Quitar un nodo no elimina la Note; eliminar la Note elimina sus nodos (`ON DELETE CASCADE`).
+
 ## 6. Integridad y eliminación
 
 - `tasks.project_id` usa `ON DELETE RESTRICT`: no se puede eliminar físicamente un proyecto que conserve tareas.
@@ -261,6 +328,11 @@ Los registros existentes se conservan con su fecha y estado aunque después camb
 - Eliminar una tarea requiere confirmación; sus filas en `note_task_links` se eliminan, y las notas quedan intactas.
 - Eliminar una nota elimina sus filas en `note_project_links`, `note_task_links` y `note_tags`; no elimina etiquetas compartidas.
 - `habit_entries.habit_id` usa `ON DELETE RESTRICT`: no se puede eliminar físicamente un hábito que conserve registros; archivar es la operación preferida.
+- `mind_spaces.is_inbox` tiene un índice único parcial: la BD no admite un segundo Inbox.
+- `mind_canvases.space_id`, `mind_space_notes.space_id` y `mind_space_notes.note_id` usan `ON DELETE CASCADE`; `mind_canvas_nodes.canvas_id` y `mind_canvas_nodes.note_id` también.
+- Eliminar una Note elimina sus membresías en Spaces y sus representaciones visuales: no quedan referencias Mind huérfanas.
+- Archivar un Space o un Canvas no elimina contenido canónico ni Canvases; restaurarlos es la operación inversa.
+- Eliminar o mover un Space nunca borra Notes.
 - No hay cascadas desde Projects a Tasks ni desde Habits a HabitEntries.
 - Activar `PRAGMA foreign_keys = ON` por cada conexión SQLite.
 - Las operaciones relacionadas y el evento correspondiente forman una única transacción.
@@ -278,6 +350,12 @@ Crear índices para consultas reales del MVP:
 - `habits(status)`, `habits(start_date)`, `habits(position)`;
 - `habit_entries(habit_id, entry_date)` y `habit_entries(entry_date)`;
 - `habit_entries UNIQUE(habit_id, entry_date)` (restricción, no índice adicional);
+- `mind_spaces(status)`;
+- `mind_spaces UNIQUE` parcial sobre `is_inbox` con predicado `is_inbox = 1`;
+- `mind_canvases(space_id)`, `mind_canvases(status)`;
+- `mind_space_notes(note_id)` (la PK compuesta ya cubre `space_id`);
+- `mind_canvas_nodes(canvas_id)`, `mind_canvas_nodes(note_id)`;
+- `mind_canvas_nodes UNIQUE(canvas_id, note_id)` (restricción, no índice adicional);
 - `activity_events(entity_type, entity_id, occurred_at)`;
 - `activity_events(event_type, occurred_at)`.
 
@@ -316,7 +394,7 @@ Si el denominador es cero (sin días programados en el período), mostrar “Sin
 
 ### 9.1 Exportación JSON
 
-La exportación incluye `format_version`, `exported_at`, `projects`, `tasks`, `notes`, `note_project_links`, `note_task_links`, `tags`, `note_tags`, `habits`, `habit_entries`, `widget_preferences`, `user_preferences` y `activity_events`. Se define de manera independiente del ORM y conserva IDs y relaciones.
+La exportación incluye `format_version`, `exported_at`, `projects`, `tasks`, `notes`, `note_project_links`, `note_task_links`, `tags`, `note_tags`, `habits`, `habit_entries`, `mind_spaces`, `mind_canvases`, `mind_space_notes`, `mind_canvas_nodes`, `widget_preferences`, `user_preferences` y `activity_events`. Se define de manera independiente del ORM y conserva IDs y relaciones.
 
 No se implementa importación de JSON desde la interfaz en el MVP.
 
@@ -360,9 +438,23 @@ La aplicación crea el directorio si no existe e informa errores de permisos o e
 14. CRUD de hábitos y transiciones `active`/`paused`/`archived`.
 15. Único registro por hábito y fecha; corrección de registros; conservación del historial ante cambios de frecuencia.
 16. Rachas, cumplimiento y consistencia con datos sintéticos conocidos (fórmulas de la sección 8.1).
+17. Inbox único: la BD rechaza un segundo `is_inbox = 1` y el servicio lo crea de forma idempotente.
+18. Spaces y Canvases: crear, renombrar, archivar y restaurar sin perder Canvases ni contenido.
+19. Cards: crear, editar por el API canónico de Notes, mover (posición persistida) y quitar sin borrar la Note.
+20. Eliminar una Note elimina sus membresías y nodos, sin dejar referencias Mind huérfanas.
+21. Exportación JSON, backup y restauración con los datos de Mind, conservando IDs y referencias.
 
 ## 13. Decisiones cerradas y límites
 
 No quedan decisiones de modelo bloqueantes para iniciar el MVP. Se adoptan UUIDv4 texto, prioridades `low/normal/high` opcionales, proyectos `active/completed/archived`, archivado preferido y borrado restringido, notas muchos-a-muchos con proyectos y tareas, etiquetas reutilizables sin renombrado en el MVP, widgets iniciales definidos arriba y JSON como formato de exportación. La restauración de backup SQLite es documentada; la importación desde JSON queda fuera de alcance.
 
 Cualquier cambio de este modelo requiere actualizar las pruebas, la migración y la documentación relacionada antes de implementarlo.
+
+### 13.1 Decisiones de Mind (MIND-002)
+
+- El contenido canónico de una Card es una Note: Mind no duplica ni copia texto.
+- La instancia visual (posición, tamaño y orden) vive en `mind_canvas_nodes`; quitar el nodo no borra la Note.
+- El Inbox es un Space reservado con `is_inbox = 1` y un índice único parcial que garantiza su unicidad en la base.
+- Las coordenadas de las Cards son del mundo, no del viewport: el mismo Canvas se abre igual en distintas pantallas.
+- No hay borrado físico de Spaces ni Canvases en esta entrega: el archivado es la operación preferida y reversible.
+- No existen tablas de conexiones entre Cards, relaciones semánticas ni documentos por bloques: corresponden a MIND-003 y MIND-004.

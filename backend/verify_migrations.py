@@ -11,8 +11,8 @@ ENV = {**os.environ, "LIFEOS_DATA_DIR": DATA_DIR}
 DB_PATH = os.path.join(DATA_DIR, "lifeos.db")
 ALEMBIC = os.path.join(os.path.dirname(sys.executable), "alembic.exe")
 
-HEAD = "0005_habits"
-PREV = "0004_widget_boolean"
+HEAD = "0006_mind"
+PREV = "0005_habits"
 
 BASE_TABLES = {
     "activity_events",
@@ -28,6 +28,12 @@ BASE_TABLES = {
     "widget_preferences",
 }
 HABIT_TABLES = {"habits", "habit_entries"}
+MIND_TABLES = {
+    "mind_spaces",
+    "mind_canvases",
+    "mind_space_notes",
+    "mind_canvas_nodes",
+}
 
 
 def run(*args: str) -> subprocess.CompletedProcess:
@@ -123,6 +129,49 @@ def insert_sample_data() -> None:
         print("OK FK RESTRICT: hábito con registros no se elimina")
     else:
         raise AssertionError("La FK RESTRICT de habits no impidió el borrado")
+    # Mind (MIND-002): Space, Canvas, Note canónica, membresía y nodo visual.
+    conn.execute(
+        "INSERT INTO notes (id, title, content, created_at, updated_at) "
+        "VALUES ('n1', 'Nota prueba', 'Contenido', '2026-01-01T00:00:00Z', "
+        "'2026-01-01T00:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO mind_spaces (id, name, description, is_inbox, status, "
+        "created_at, updated_at) VALUES ('s1', 'Inbox', NULL, 1, 'active', "
+        "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO mind_canvases (id, space_id, title, description, status, "
+        "created_at, updated_at) VALUES ('c1', 's1', 'Canvas prueba', NULL, "
+        "'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO mind_space_notes (space_id, note_id, created_at) "
+        "VALUES ('s1', 'n1', '2026-01-01T00:00:00Z')"
+    )
+    conn.execute(
+        "INSERT INTO mind_canvas_nodes (id, canvas_id, note_id, x, y, width, "
+        "height, z_index, created_at, updated_at) VALUES ('m1', 'c1', 'n1', "
+        "12.5, 40.0, NULL, NULL, 0, '2026-01-01T00:00:00Z', "
+        "'2026-01-01T00:00:00Z')"
+    )
+    # Índice único parcial: un segundo Inbox debe ser rechazado por la BD.
+    try:
+        conn.execute(
+            "INSERT INTO mind_spaces (id, name, description, is_inbox, status, "
+            "created_at, updated_at) VALUES ('s2', 'Otro Inbox', NULL, 1, "
+            "'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+        )
+    except sqlite3.IntegrityError as exc:
+        assert "UNIQUE" in str(exc).upper(), f"Error inesperado: {exc}"
+        print("OK índice único parcial: segundo Inbox rechazado")
+    else:
+        raise AssertionError("El segundo Inbox no fue rechazado")
+    # Borrar la Note elimina sus referencias visuales (ON DELETE CASCADE).
+    conn.execute("DELETE FROM notes WHERE id='n1'")
+    nodes = conn.execute("SELECT COUNT(*) FROM mind_canvas_nodes").fetchone()[0]
+    assert nodes == 0, f"mind_canvas_nodes conservó {nodes} filas huérfanas"
+    print("OK ON DELETE CASCADE: borrar la Note elimina sus referencias Mind")
     conn.commit()
     conn.close()
     print("OK datos sintéticos insertados")
@@ -142,7 +191,7 @@ def assert_core_data() -> None:
 # 1. Base vacía → upgrade head
 run("upgrade", "head")
 got = set(tables())
-missing = (BASE_TABLES | HABIT_TABLES) - got
+missing = (BASE_TABLES | HABIT_TABLES | MIND_TABLES) - got
 assert not missing, f"Faltan tablas: {missing}"
 print(f"OK base vacía → head: {len(got)} tablas")
 check_integrity("base vacía")
@@ -151,32 +200,35 @@ check_version(HEAD)
 # 2. Datos sintéticos (incluye hábitos y sus restricciones)
 insert_sample_data()
 
-# 3. Downgrade a 0004 (versión previa real) y re-upgrade a head
+# 3. Downgrade a 0005 (versión previa real) y re-upgrade a head
 run("downgrade", PREV)
 conn = db()
 try:
     remaining = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert "habits" not in remaining and "habit_entries" not in remaining
-    assert BASE_TABLES <= remaining, f"Faltan tablas de 0004: {BASE_TABLES - remaining}"
+    assert not (MIND_TABLES & remaining), f"Las tablas de Mind deben caer: {MIND_TABLES & remaining}"
+    assert HABIT_TABLES <= remaining, f"Faltan tablas de 0005: {HABIT_TABLES - remaining}"
 finally:
     conn.close()
-check_integrity("tras downgrade a 0004")
+check_integrity("tras downgrade a 0005")
 check_version(PREV)
-print("OK downgrade a 0004_widget_boolean: tablas de hábitos eliminadas, 0004 intacta")
+print("OK downgrade a 0005_habits: tablas de Mind eliminadas, 0005 intacta")
 
 run("upgrade", "head")
 assert_core_data()
 conn = db()
 try:
-    assert tables() and (BASE_TABLES | HABIT_TABLES) <= set(tables())
-    # Los registros de hábitos vivían en 0005: se recrean vacías (esperado)
+    assert tables() and (BASE_TABLES | HABIT_TABLES | MIND_TABLES) <= set(tables())
+    # Los datos de hábitos vivían en 0005: sobreviven al ciclo
     n = conn.execute("SELECT COUNT(*) FROM habit_entries").fetchone()[0]
-    assert n == 0, f"habit_entries debería estar vacía tras re-upgrade, tiene {n}"
+    assert n == 1, f"habit_entries debería conservar 1 fila, tiene {n}"
+    # Las tablas de Mind vivían en 0006: se recrean vacías (esperado)
+    n = conn.execute("SELECT COUNT(*) FROM mind_canvas_nodes").fetchone()[0]
+    assert n == 0, f"mind_canvas_nodes debería estar vacía, tiene {n}"
 finally:
     conn.close()
-check_integrity("re-upgrade desde 0004")
+check_integrity("re-upgrade desde 0005")
 check_version(HEAD)
-print("OK upgrade desde 0004 a head: datos 0004 intactos y tablas de hábitos creadas")
+print("OK upgrade desde 0005 a head: datos 0005 intactos y tablas de Mind creadas")
 
 # 4. Downgrade a 0001 (versión histórica de prueba) y re-upgrade
 run("downgrade", "0001_initial_schema")
@@ -188,6 +240,7 @@ try:
     assert "notes" not in remaining, "0001 no debe tener notes"
     assert "widget_preferences" not in remaining, "0001 no debe tener widget_preferences"
     assert "habits" not in remaining, "0001 no debe tener habits"
+    assert not (MIND_TABLES & remaining), "0001 no debe tener tablas de Mind"
     rows = conn.execute("SELECT id, name FROM projects").fetchall()
     assert rows == [("p1", "Proyecto prueba")], f"Datos de 0001 alterados: {rows}"
 finally:
