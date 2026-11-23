@@ -3,7 +3,7 @@
 **Versión:** 0.2  
 **Fecha:** 22 de noviembre de 2026  
 **Rama de planificación:** `planning/mind-001`  
-**Estado:** roadmap aprobado como dirección; MIND-002 especificada para inicio.  
+**Estado:** dirección aprobada; MIND-002 implementada y en REVIEW; MIND-003 en PLANNING.  
 **Autoridad:** Product Owner
 
 ## 1. Decisión de producto
@@ -39,7 +39,7 @@ La referencia funcional es `MIND_PRODUCT_MODEL.md`; los Orbes se rigen por `ORBE
 **Regla:** el primer borrador técnico se conserva como auditoría histórica; no se utiliza su orden viejo cuando contradiga este roadmap.
 
 ### MIND-002 — Primer núcleo funcional: Spaces, Inbox y Canvas con Cards simples
-**Estado:** READY — SPEC en `docs/factory/work/MIND-002/SPEC.md`.  
+**Estado:** REVIEW — implementación y QA entregadas; pendiente aceptación explícita del PO. SPEC en `docs/factory/work/MIND-002/SPEC.md`.  
 **Objetivo:** que Mind ya pueda utilizarse para crear contextos, capturar ideas y colocarlas en un lienzo persistente.
 **Incluye:**
 - entrada Mind en navegación;
@@ -58,7 +58,7 @@ La referencia funcional es `MIND_PRODUCT_MODEL.md`; los Orbes se rigen por `ORBE
 **Estado:** PLANNING.  
 **Objetivo:** completar la experiencia de lienzo.
 **Incluye:** conexiones visuales entre Cards, selección múltiple, agrupación/frames si se justifican, resize, orden visual, teclado/touch, operaciones reversibles y undo/redo. Persistencia integrada, no diferida.  
-**Criterio:** ninguna interacción espacial puede existir como estado efímero que se pierda al recargar.
+**Guía de planificación:** `docs/factory/work/MIND-003/PO_GUIDANCE.md`; dirección Home–Mind: `docs/product/HOME_MIND_PRODUCT_DIRECTION.md`.\n**Criterio:** ninguna interacción espacial puede existir como estado efímero que se pierda al recargar.
 
 ### MIND-004 — Cards ricas y documentos
 **Estado:** PLANNING.  
@@ -145,8 +145,8 @@ MIND-006, MIND-007 y MIND-008 pueden planificarse con cierto solapamiento cuando
 
 ## 6. Reglas de autorización
 
-- Solo MIND-002 está READY.
-- Cada fase posterior requiere SPEC propia y revisión de dependencias antes de comenzar.
+- MIND-002 está en REVIEW: implementación y QA entregadas; la aceptación del PO sigue siendo explícita.\n- MIND-003 permanece en PLANNING hasta SPEC revisada y autorización READY del PO.
+- Cada fase posterior requiere SPEC propia y revisión de dependencias antes de comenzar. Para MIND-003, usar `docs/factory/work/MIND-003/PO_GUIDANCE.md`.
 - No implementar Orbes, voz ni IA en las fases MIND-002 a MIND-009.
 - Los cambios de esquema y contratos API deben justificarse en su SPEC y documentarse en `DATABASE.md`.
 - Mimo implementa; un reviewer distinto realiza QA independiente cuando esté disponible; el PO acepta o rechaza.

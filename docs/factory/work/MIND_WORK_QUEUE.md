@@ -1,6 +1,6 @@
 # Mind — Work Queue
 
-**Actualizada:** 22 de noviembre de 2026  
+**Actualizada:** 23 de noviembre de 2026  
 **Fuente de orden:** `docs/product/MIND_ROADMAP.md`  
 **Responsable de priorización y aceptación:** Product Owner
 
@@ -18,7 +18,7 @@
 | ID | Entrega | Prioridad | Dependencias | Responsable | Estado |
 |---|---|---:|---|---|---|
 | MIND-001 | Diseño y planificación consolidada | P0 | Visión + auditoría técnica | Product/Architecture | REVIEW — roadmap 0.2 consolidado |
-| MIND-002 | Primer núcleo funcional: Spaces, Inbox y Canvas con Cards simples | P0 | MIND-001 | Mimo / Developer | READY |
+| MIND-002 | Primer núcleo funcional: Spaces, Inbox y Canvas con Cards simples | P0 | MIND-001 | Mimo / Developer | REVIEW — implementación y QA entregadas; pendiente aceptación del PO |
 | MIND-003 | Canvas interactivo y relaciones visuales | P1 | MIND-002 | Mimo / Developer | PLANNING |
 | MIND-004 | Cards ricas y documentos por bloques | P1 | MIND-003 | Product/Architecture + Mimo | PLANNING |
 | MIND-005 | Knowledge, búsqueda, reutilización y relaciones semánticas | P1 | MIND-004 | Mimo / Developer | PLANNING |
@@ -39,4 +39,4 @@
 5. Antes de MIND-004, decidir el modelo canónico de documentos ricos, preservando Notes existentes.
 6. Las tareas MIND-003 en adelante no comienzan hasta contar con SPEC y dependencias aceptadas.
 7. Preservar el worktree y los cambios de Evolution. Mind se implementa en un worktree independiente.
-8. Cada entrega se prueba con DB temporal, revisión del diff y QA visual; se publica en la rama asignada a Mind y queda en REVIEW.
+8. Cada entrega se prueba con DB temporal, revisión del diff y QA visual; se publica en la rama asignada a Mind y queda en REVIEW.\n9. La planificación de MIND-003 sigue `docs/factory/work/MIND-003/PO_GUIDANCE.md` y `docs/product/HOME_MIND_PRODUCT_DIRECTION.md`. No comenzar código hasta SPEC revisada y autorización READY del PO.
