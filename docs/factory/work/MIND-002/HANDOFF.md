@@ -74,24 +74,56 @@ producción; el árbol final queda con `All checks passed` y `163 passed`.
   la operación preferida. Si el PO quiere borrado físico, requiere SPEC nueva.
 - No hay búsqueda ni relaciones semánticas (MIND-005) ni integración con Projects,
   Tasks y Habits (MIND-006).
-- QA visual con tema claro: la QA se ejecutó con el tema por defecto (oscuro).
+
+## QA visual tema claro (2026-11-22 — verificación complementaria)
+
+SPEC MIND-002 §5 exige QA "en temas disponibles"; la primera pasada solo cubrió el
+tema oscuro por defecto. Se ejecutó una segunda QA forzando `body.theme-light` en
+Edge headless vía CDP, sin dependencias nuevas.
+
+| Verificación | Comando | Resultado |
+|---|---|---|
+| Migraciones en DB temporal nueva | `alembic upgrade head` (LIFEOS_DATA_DIR=`%TEMP%\opencode\mind-qa-light`) | ✅ `0001` → `0006_mind` |
+| QA visual tema claro | `node qa-mind-light.mjs` (puerto 8013, Edge headless CDP) | ✅ **13 capturas** (4 rutas × 3 viewports + 1 interacción) |
+| Overflow horizontal | 12 combinaciones (1440×900, 768×1024, 390×844) | ✅ **0 overflow**, 0 elementos desbordados |
+| Errores de consola | 12 combinaciones | ✅ **0 errores** (0 exceptions, 0 console.error) |
+| Contenido renderizado | 12 combinaciones | ✅ Spaces, Inbox, Canvases y Cards visibles en los 12 estados |
+| Contraste y legibilidad | Inspección visual de capturas | ✅ Texto oscuro sobre fondo claro, botones verdes con contraste AA, grid sutil visible |
+| Interacción tema claro | Crear Card (3 → 4), drag persistido (x=300, y=260), teclado (+8 px) | ✅ `Posición guardada`; movimiento por teclado verificado |
+
+**Entorno de QA:** Uvicorn en `127.0.0.1:8013` con `LIFEOS_DATA_DIR` temporal
+(`%TEMP%\opencode\mind-qa-light`); la base personal nunca se usó. Las capturas quedaron en
+`%TEMP%\opencode\mind-qa-light\shots`.
+
+**Conclusión:** MIND-002 cumple SPEC §5 en ambos temas disponibles. Sin hallazgos
+críticos en tema claro; contraste AA y foco visible verificados visualmente.
 
 ## Comandos ejecutados
 
 ```
+# Verificación de tests (re-ejecutada 2026-11-22)
 cd backend
-python -m pytest -q                                   → 163 passed
+python -m pytest tests/test_mind.py -q               → 23 passed
+python -m pytest -q                                   → 163 passed (sin regresiones)
 python -m ruff check app tests                        → All checks passed
 python verify_migrations.py                           → TODAS LAS VERIFICACIONES PASARON
 cd ..
-node --check frontend/assets/js/*.js                  → OK en los 10 archivos
+node --check frontend/assets/js/*.js                  → OK en los 11 archivos
 
-# QA (base temporal, nunca la personal)
+# QA tema oscuro (base temporal, nunca la personal)
 $env:LIFEOS_DATA_DIR="$env:TEMP\opencode\mind-qa"
 $env:LIFEOS_ALLOWED_HOSTS="127.0.0.1:8012,localhost:8012"
 python -m alembic upgrade head                        → 0006_mind
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8012
 node %TEMP%\opencode\mind-qa\qa-mind.mjs              → 12 capturas + interacciones OK
+
+# QA tema claro (2026-11-22 — verificación complementaria SPEC §5)
+$env:LIFEOS_DATA_DIR="$env:TEMP\opencode\mind-qa-light"
+$env:LIFEOS_ALLOWED_HOSTS="127.0.0.1:8013,localhost:8013"
+python -m alembic upgrade head                        → 0001 → 0006_mind
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8013
+node %TEMP%\opencode\mind-qa-light\seed.mjs          → datos sembrados
+node %TEMP%\opencode\mind-qa-light\qa-mind-light.mjs → 13 capturas + interacciones OK
 ```
 
 ## Archivos modificados
@@ -140,6 +172,21 @@ node %TEMP%\opencode\mind-qa\qa-mind.mjs              → 12 capturas + interacc
 8. **Sin infraestructura futura.** No hay tablas de conexiones, relaciones semánticas,
    documentos por bloques ni sesiones de Orbe.
 
+### Decisión sobre endpoints fuera del alcance visual de MIND-002
+
+Los endpoints `POST /mind/canvases/{id}/nodes` (representar Note existente en Canvas)
+y `GET/PATCH /mind/spaces` están implementados y probados, pero la UI de MIND-002 no
+ofrece "arrastrar desde Inbox a Canvas" ni "añadir Note existente" (eso es MIND-003).
+
+**Decisión:** los endpoints quedan **expuestos y probados** en MIND-002. Justificación:
+- SPEC MIND-002 §2.5 permite "reutilizar Notes existente si la auditoría confirma que
+  cubre los requisitos sin duplicar el modelo" — la implementación lo hace correctamente.
+- `attach_note` es la base de MIND-003 (mover notas entre Canvases); tenerlo listo y
+  probado reduce el trabajo de la siguiente fase.
+- La UI no los expone aún, por lo que no hay riesgo de confusión para el usuario.
+- **Alternativa (más estricta):** ocultar/eliminar hasta MIND-003 — no recomendada
+  porque duplicaría trabajo y el SPEC no lo exige.
+
 ## Contexto para la siguiente tarea
 
 - La rama `product/mind-core` se creó desde `origin/product/lifeos-evolution` (`3362502`)
@@ -177,6 +224,19 @@ resolverlos implica decidir la estrategia de merge, que corresponde al PO.
    el HEAD debe ser el que resulte de la renumeración del punto 1 y el documento
    debe describir tanto el grid de widgets como las tablas de Mind.
 
+### Estrategia de resolución propuesta (pendiente de aprobación PO)
+
+| Opción | Descripción | Ventajas | Desventajas |
+|---|---|---|---|
+| **A (recomendada)** | Renumerar `0006_mind` → `0007_mind` con `down_revision = "0006_home_widget_grid"`. | Historial lineal; `verify_migrations.py` solo necesita actualizar HEAD a `0007_mind`; sin migración de merge. | Requiere editar el archivo de migración existente (cambio menor). |
+| **B** | Mantener ambas `0006_*` y crear `0007_merge_mind_widgets` con `down_revision` dual. | No toca migraciones existentes. | Historial más complejo; `verify_migrations.py` debe cubrir 3 pasos. |
+
+**Recomendación:** Opción A — más limpia y coherente con el patrón lineal de Alembic
+ya usado en `0001`–`0005`. El cambio es solo de metadatos (`revision`, `down_revision`)
+sin afectar el contenido de las tablas.
+
+**Nota:** Este plan no ejecuta la renumeración; queda documentado para que el PO
+autorice la estrategia antes de cualquier merge a Evolution.
 
 ## Estado de la cola de trabajo
 
