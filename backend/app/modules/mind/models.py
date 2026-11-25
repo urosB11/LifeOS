@@ -1,8 +1,7 @@
-"""Modelos de datos de Mind: Spaces, Canvases, membresías y nodos (MIND-002).
+"""Modelos de datos de Mind: Spaces, Canvases, membresías, nodos y edges (MIND-002/003).
 
-Límites de esta entrega (SPEC MIND-002 §3):
-- No existen `mind_canvas_edges`, relaciones semánticas ni documentos por
-  bloques: quedan para MIND-003 y MIND-004.
+Límites de esta entrega (SPEC MIND-002 §3, MIND-003 §2):
+- `mind_canvas_edges` para conexiones visuales no dirigidas entre Cards.
 - El contenido canónico sigue siendo `notes`; estas tablas guardan contextos
   y representaciones visuales, nunca copias del texto.
 """
@@ -11,8 +10,10 @@ from __future__ import annotations
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -69,7 +70,7 @@ class MindSpace(Base):
 class MindCanvas(Base):
     """Supericie visual libre dentro de un Space (SPEC MIND-002 §2.4).
 
-    El Canvas tiene identidad y metadados propios; archivarlo conserva sus
+    El Canvas tiene identidad y metadatos propios; archivarlo conserva sus
     nodos y el contenido de las Notes referenciadas.
     """
 
@@ -171,4 +172,142 @@ class MindCanvasNode(Base):
         return f"<MindCanvasNode(id={self.id}, canvas_id={self.canvas_id})>"
 
 
-__all__ = ["MindSpace", "MindCanvas", "MindSpaceNote", "MindCanvasNode"]
+class MindCanvasEdge(Base):
+    """Conexión visual no dirigida entre dos Cards del mismo Canvas (MIND-003).
+
+    - `source_node_id` y `target_node_id` referencian `mind_canvas_nodes.id`.
+    - La pareja (source, target) se almacena normalizada (menor ID primero)
+      para evitar duplicados A→B y B→A.
+    - `source_anchor`/`target_anchor` ∈ [0..7] indican el punto de anclaje
+      en el perímetro de cada Card (0=centro sup, 1=esq sup der, ...).
+    - FK simple a mind_canvas_nodes.id + CHECK para validar mismo canvas.
+    - ON DELETE CASCADE: al borrar una Card, sus conexiones se eliminan.
+    """
+
+    __tablename__ = "mind_canvas_edges"
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["source_node_id"],
+            ["mind_canvas_nodes.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["target_node_id"],
+            ["mind_canvas_nodes.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["canvas_id"],
+            ["mind_canvases.id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "canvas_id",
+            "source_node_id",
+            "target_node_id",
+            name="uq_mind_canvas_edges_canvas_source_target",
+        ),
+        CheckConstraint(
+            "source_node_id < target_node_id",
+            name="ck_mind_canvas_edges_source_lt_target",
+        ),
+        CheckConstraint(
+            "source_anchor BETWEEN 0 AND 7",
+            name="ck_mind_canvas_edges_source_anchor",
+        ),
+        CheckConstraint(
+            "target_anchor BETWEEN 0 AND 7",
+            name="ck_mind_canvas_edges_target_anchor",
+        ),
+        Index(
+            "ix_mind_canvas_edges_canvas_source",
+            "canvas_id",
+            "source_node_id",
+        ),
+        Index(
+            "ix_mind_canvas_edges_canvas_target",
+            "canvas_id",
+            "target_node_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    canvas_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("mind_canvases.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source_node_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        index=True,
+    )
+    target_node_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        index=True,
+    )
+    source_anchor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    target_anchor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[str] = mapped_column(String(32), nullable=False, default=utc_now)
+    updated_at: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<MindCanvasEdge(id={self.id}, canvas={self.canvas_id}, {self.source_node_id}→{self.target_node_id})>"
+
+
+class MindCanvasHistory(Base):
+    """Historial espacial reversible y acotado por Canvas (MIND-003).
+
+    Almacena snapshots de operaciones para soportar undo/redo.
+    - action_type: tipo de operacion (create_node, update_node, delete_node,
+      create_edge, delete_edge, reorder, batch).
+    - snapshot_json: estado del Canvas antes de la accion (nodos, edges, z-index).
+    - inverse_json: operacion inversa para redo (cuando corresponde).
+    - request_key: clave idempotente de la solicitud original.
+    - Acotado: se purgan entradas antiguas por Canvas (p. ej., 100 ultimas).
+    """
+
+    __tablename__ = "mind_canvas_history"
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["canvas_id"],
+            ["mind_canvases.id"],
+            ondelete="CASCADE",
+        ),
+        Index(
+            "ix_mind_canvas_history_canvas_created",
+            "canvas_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    canvas_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("mind_canvases.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    action_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)
+    inverse_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    request_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[str] = mapped_column(String(32), nullable=False, default=utc_now)
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<MindCanvasHistory(id={self.id}, canvas={self.canvas_id}, action={self.action_type})>"
+
+__all__ = [
+    "MindSpace",
+    "MindCanvas",
+    "MindSpaceNote",
+    "MindCanvasNode",
+    "MindCanvasEdge",
+    "MindCanvasHistory",
+]

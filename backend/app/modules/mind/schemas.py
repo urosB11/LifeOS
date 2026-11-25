@@ -1,4 +1,4 @@
-"""Esquemas Pydantic para Mind (MIND-002)."""
+"""Esquemas Pydantic para Mind (MIND-002/003)."""
 
 from __future__ import annotations
 
@@ -163,6 +163,33 @@ class MindNodeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MindEdgeCreate(BaseModel):
+    """Crea una conexión visual entre dos Cards del mismo Canvas."""
+
+    source_node_id: str = Field(..., min_length=1, max_length=36)
+    target_node_id: str = Field(..., min_length=1, max_length=36)
+
+    @field_validator("target_node_id")
+    @classmethod
+    def different_nodes(cls, value: str, info) -> str:
+        if info.data.get("source_node_id") == value:
+            raise ValueError("Una Card no puede conectarse a sí misma")
+        return value
+
+
+class MindEdgeOut(BaseModel):
+    id: str
+    canvas_id: str
+    source_node_id: str
+    target_node_id: str
+    source_anchor: int
+    target_anchor: int
+    created_at: str
+    updated_at: str
+
+    model_config = {"from_attributes": True}
+
+
 class MindCaptureCreate(BaseModel):
     """Captura rápida del Inbox: contenido obligatorio, título opcional."""
 
@@ -189,6 +216,36 @@ class MindInboxOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MindHistoryTransition(BaseModel):
+    """Transición de historial (undo/redo) con clave idempotente."""
+
+    expected_action_id: str | None = Field(default=None, max_length=36)
+    idempotency_key: str = Field(..., min_length=1, max_length=64)
+
+
+class MindHistoryOut(BaseModel):
+    """Estado del historial de un Canvas."""
+
+    can_undo: bool
+    can_redo: bool
+    undo_action_id: str | None = None
+    redo_action_id: str | None = None
+
+
+class MindCanvasHistoryOut(BaseModel):
+    """Entrada individual del historial."""
+
+    id: str
+    canvas_id: str
+    action_type: str
+    snapshot_json: str
+    inverse_json: str | None = None
+    request_key: str | None = None
+    created_at: str
+
+    model_config = {"from_attributes": True}
+
+
 __all__ = [
     "MindSpaceCreate",
     "MindSpaceUpdate",
@@ -202,6 +259,11 @@ __all__ = [
     "MindNodeUpdate",
     "MindNoteBrief",
     "MindNodeOut",
+    "MindEdgeCreate",
+    "MindEdgeOut",
     "MindCaptureCreate",
     "MindInboxOut",
+    "MindHistoryTransition",
+    "MindHistoryOut",
+    "MindCanvasHistoryOut",
 ]

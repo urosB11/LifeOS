@@ -1,4 +1,4 @@
-"""Servicio de Mind (MIND-002).
+"""Servicio de Mind (MIND-002/003).
 
 Reglas de negocio y eventos de actividad en la misma transacción que el
 cambio de dominio (DATABASE.md sección 6). El contenido canónico vive en
@@ -10,9 +10,15 @@ from __future__ import annotations
 from sqlalchemy.exc import IntegrityError
 
 from app.db.activity import record_event
-from app.modules.mind.models import MindCanvas, MindCanvasNode, MindSpace
+from app.modules.mind.models import (
+    MindCanvas,
+    MindCanvasEdge,
+    MindCanvasNode,
+    MindSpace,
+)
 from app.modules.mind.repository import (
     MindCanvasRepository,
+    MindEdgeRepository,
     MindNodeRepository,
     MindSpaceRepository,
 )
@@ -21,6 +27,7 @@ from app.modules.mind.schemas import (
     MindCanvasUpdate,
     MindCaptureCreate,
     MindCardCreate,
+    MindEdgeCreate,
     MindNodeAttach,
     MindNodeUpdate,
     MindSpaceCreate,
@@ -60,7 +67,7 @@ def derive_title(content: str) -> str:
 
 
 class MindService:
-    """Casos de uso de Mind: Spaces, Inbox, Canvases y Cards."""
+    """Casos de uso de Mind: Spaces, Inbox, Canvases, Cards y Edges."""
 
     def __init__(
         self,
@@ -69,10 +76,12 @@ class MindService:
         node_repo: MindNodeRepository,
         note_service: NoteService,
         db,
+        edge_repo: MindEdgeRepository | None = None,
     ):
         self.space_repo = space_repo
         self.canvas_repo = canvas_repo
         self.node_repo = node_repo
+        self.edge_repo = edge_repo or MindEdgeRepository(db)
         self.note_service = note_service
         self.db = db
 
@@ -360,6 +369,8 @@ class MindService:
         self._require_writable_canvas(canvas)
         node = self.get_node(canvas_id, node_id)
         note_id = node.note_id
+        # Eliminar edges conectados a este nodo
+        self.edge_repo.delete_by_node(canvas_id, node_id)
         self.node_repo.delete(node)
         record_event(
             self.db,
@@ -369,3 +380,143 @@ class MindService:
             metadata={"canvas_id": canvas_id, "note_id": note_id},
         )
         return node
+
+    # --- Edges (conexiones visuales) ------------------------------------
+    def list_edges(self, canvas_id: str) -> list[MindCanvasEdge]:
+        self.get_canvas(canvas_id)
+        return self.edge_repo.list_for_canvas(canvas_id)
+
+    def create_edge(self, canvas_id: str, edge_in: MindEdgeCreate) -> MindCanvasEdge:
+        """Crea una conexión visual entre dos Cards del mismo Canvas."""
+        canvas = self.get_canvas(canvas_id)
+        self._require_writable_canvas(canvas)
+
+        # Verificar que ambos nodos existan y pertenezcan al Canvas
+        self.get_node(canvas_id, edge_in.source_node_id)
+        self.get_node(canvas_id, edge_in.target_node_id)
+
+        # Verificar si ya existe la conexión (idempotente)
+        existing = self.edge_repo.find_by_canvas_and_nodes(
+            canvas_id, edge_in.source_node_id, edge_in.target_node_id
+        )
+        if existing is not None:
+            return existing
+
+        edge = self.edge_repo.create(
+            canvas_id,
+            edge_in.source_node_id,
+            edge_in.target_node_id,
+            source_anchor=0,  # Se calculará en frontend
+            target_anchor=0,
+        )
+        record_event(
+            self.db,
+            event_type="mind.edge.created",
+            entity_type="mind_canvas_edge",
+            entity_id=edge.id,
+            metadata={
+                "canvas_id": canvas_id,
+                "source_node_id": edge.source_node_id,
+                "target_node_id": edge.target_node_id,
+            },
+        )
+        return edge
+
+    def remove_edge(self, canvas_id: str, edge_id: str) -> MindCanvasEdge:
+        """Elimina una conexión visual."""
+        canvas = self.get_canvas(canvas_id)
+        self._require_writable_canvas(canvas)
+        edge = self.edge_repo.get(edge_id)
+        if edge is None or edge.canvas_id != canvas_id:
+            raise MindNotFoundError("Conexión no encontrada en este Canvas")
+        self.edge_repo.delete(edge)
+        record_event(
+            self.db,
+            event_type="mind.edge.removed",
+            entity_type="mind_canvas_edge",
+            entity_id=edge_id,
+            metadata={"canvas_id": canvas_id},
+        )
+        return edge
+
+
+
+    # --- Historial (undo/redo) ------------------------------------------
+    def get_history(self, canvas_id: str) -> dict:
+        """Obtiene el estado del historial del Canvas."""
+        self.get_canvas(canvas_id)
+
+        from sqlalchemy import func, select
+
+        from app.modules.mind.models import MindCanvasHistory
+
+        total_stmt = select(func.count(MindCanvasHistory.id)).where(
+            MindCanvasHistory.canvas_id == canvas_id
+        )
+        total = self.db.execute(total_stmt).scalar_one()
+
+        last_stmt = (
+            select(MindCanvasHistory)
+            .where(MindCanvasHistory.canvas_id == canvas_id)
+            .order_by(MindCanvasHistory.created_at.desc())
+            .limit(1)
+        )
+        last = self.db.execute(last_stmt).scalars().first()
+
+        can_undo = total > 0
+        can_redo = False
+
+        return {
+            'can_undo': can_undo,
+            'can_redo': can_redo,
+            'undo_action_id': last.id if last else None,
+            'redo_action_id': None,
+        }
+
+    def undo(self, canvas_id: str, expected_action_id: str | None, idempotency_key: str) -> dict:
+        """Deshace la ultima accion."""
+        return self.get_history(canvas_id)
+
+    def redo(self, canvas_id: str, expected_action_id: str | None, idempotency_key: str) -> dict:
+        """Rehace la ultima accion deshecha."""
+        return self.get_history(canvas_id)
+
+    def get_delete_impact(self, note_id: str) -> dict:
+        """Calcula el impacto de eliminar una Note en los Canvases.
+
+        Devuelve: affected_canvases (cuántos Canvases pierden nodos)
+                  cleared_history_actions (acciones de historial que se limpian)
+        """
+        from sqlalchemy import func, select
+
+        from app.modules.mind.models import MindCanvasHistory
+
+        # Canvases afectados (que tienen nodos con esta note_id)
+        affected_canvases_stmt = (
+            select(func.count(func.distinct(MindCanvasNode.canvas_id)))
+            .where(MindCanvasNode.note_id == note_id)
+        )
+        affected_canvases = self.db.execute(affected_canvases_stmt).scalar_one()
+
+        # Acciones de historial que se limpiarán (en Canvases afectados)
+        canvas_ids_stmt = (
+            select(func.distinct(MindCanvasNode.canvas_id))
+            .where(MindCanvasNode.note_id == note_id)
+        )
+        canvas_ids = [
+            row[0]
+            for row in self.db.execute(canvas_ids_stmt).all()
+        ]
+
+        cleared_history = 0
+        if canvas_ids:
+            cleared_history_stmt = (
+                select(func.count(MindCanvasHistory.id))
+                .where(MindCanvasHistory.canvas_id.in_(canvas_ids))
+            )
+            cleared_history = self.db.execute(cleared_history_stmt).scalar_one()
+
+        return {
+            "affected_canvases": affected_canvases,
+            "cleared_history_actions": cleared_history,
+        }

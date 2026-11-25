@@ -20,6 +20,7 @@ from app.modules.dashboard.repository import UserPreferenceRepository
 from app.modules.habits.models import Habit, HabitEntry
 from app.modules.mind.models import (
     MindCanvas,
+    MindCanvasEdge,
     MindCanvasNode,
     MindSpace,
     MindSpaceNote,
@@ -28,7 +29,7 @@ from app.modules.notes.models import Note, NoteProjectLink, NoteTag, NoteTaskLin
 from app.modules.projects.models import Project
 from app.modules.tasks.models import Task
 
-EXPORT_FORMAT_VERSION = 1
+EXPORT_FORMAT_VERSION = 2
 
 
 def _row_dict(row) -> dict[str, Any]:
@@ -58,6 +59,7 @@ def build_export(db) -> dict[str, Any]:
         "mind_canvases": list_table(MindCanvas),
         "mind_space_notes": list_table(MindSpaceNote),
         "mind_canvas_nodes": list_table(MindCanvasNode),
+        "mind_canvas_edges": list_table(MindCanvasEdge),
         "widget_preferences": list_table(WidgetPreference),
         "user_preferences": [
             {"key": p.key, "value": p.value, "updated_at": p.updated_at}
@@ -100,3 +102,70 @@ def validate_sqlite_file(path: str) -> None:
         conn.execute("PRAGMA foreign_key_check")
     finally:
         conn.close()
+
+
+def import_json_payload(db, payload: str) -> dict:
+    """Importa un JSON de exportación en la base de datos actual.
+
+    - Valida la versión del formato.
+    - Inserta solo registros que no existan (por PK); no sobrescribe.
+    - Requiere que las FK referenciadas existan o estén en el mismo payload.
+    - Lanza ValueError si hay conflictos de integridad.
+    """
+    data = json.loads(payload)
+    fmt = data.get("format_version")
+    if fmt is None or fmt > EXPORT_FORMAT_VERSION:
+        raise ValueError(f"Formato no soportado: {fmt}. Máximo soportado: {EXPORT_FORMAT_VERSION}")
+
+    # Orden de inserción respetando dependencias FK
+    tables_order = [
+        ("projects", Project),
+        ("tags", Tag),
+        ("notes", Note),
+        ("note_project_links", NoteProjectLink),
+        ("note_task_links", NoteTaskLink),
+        ("note_tags", NoteTag),
+        ("tasks", Task),
+        ("habits", Habit),
+        ("habit_entries", HabitEntry),
+        ("mind_spaces", MindSpace),
+        ("mind_canvases", MindCanvas),
+        ("mind_space_notes", MindSpaceNote),
+        ("mind_canvas_nodes", MindCanvasNode),
+        ("mind_canvas_edges", MindCanvasEdge),
+        ("widget_preferences", WidgetPreference),
+        ("activity_events", ActivityEvent),
+    ]
+
+    inserted = 0
+    skipped = 0
+    for key, model in tables_order:
+        if key not in data:
+            continue
+        rows = data[key]
+        for row_data in rows:
+            pk_cols = [c.name for c in model.__table__.primary_key.columns]
+            pk_vals = tuple(row_data[c] for c in pk_cols)
+            existing = db.get(model, pk_vals[0] if len(pk_vals) == 1 else pk_vals)
+            if existing:
+                skipped += 1
+                continue
+            obj = model(**row_data)
+            db.add(obj)
+            inserted += 1
+        db.flush()
+
+    # user_preferences (no ORM model directo)
+    if "user_preferences" in data:
+        from app.modules.dashboard.repository import UserPreferenceRepository
+        repo = UserPreferenceRepository(db)
+        for pref in data["user_preferences"]:
+            existing = repo.get(pref["key"])
+            if not existing:
+                repo.set(pref["key"], pref["value"])
+                inserted += 1
+            else:
+                skipped += 1
+
+    db.commit()
+    return {"inserted": inserted, "skipped": skipped, "format_version": fmt}

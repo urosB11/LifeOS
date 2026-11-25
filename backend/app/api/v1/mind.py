@@ -1,10 +1,11 @@
-"""Rutas API de Mind (MIND-002): Spaces, Inbox, Canvases y Cards."""
+"""Rutas API de Mind (MIND-002/003): Spaces, Inbox, Canvases, Cards y Edges."""
 
 from fastapi import APIRouter, Depends, status
 
 from app.db.session import get_db
 from app.modules.mind.repository import (
     MindCanvasRepository,
+    MindEdgeRepository,
     MindNodeRepository,
     MindSpaceRepository,
 )
@@ -14,6 +15,10 @@ from app.modules.mind.schemas import (
     MindCanvasUpdate,
     MindCaptureCreate,
     MindCardCreate,
+    MindEdgeCreate,
+    MindEdgeOut,
+    MindHistoryOut,
+    MindHistoryTransition,
     MindInboxOut,
     MindNodeAttach,
     MindNodeOut,
@@ -55,6 +60,7 @@ def _mind_service(
         space_repo=MindSpaceRepository(db),
         canvas_repo=MindCanvasRepository(db),
         node_repo=MindNodeRepository(db),
+        edge_repo=MindEdgeRepository(db),
         note_service=note_service,
         db=db,
     )
@@ -244,6 +250,44 @@ def remove_node(
     service.remove_node(canvas_id, node_id)
 
 
+# --- Edges (conexiones visuales) -----------------------------------------
+
+
+@router.get(
+    "/canvases/{canvas_id}/edges", response_model=list[MindEdgeOut]
+)
+def list_edges(canvas_id: str, service: MindService = Depends(_mind_service)):
+    """Lista las conexiones del Canvas."""
+    return service.list_edges(canvas_id)
+
+
+@router.post(
+    "/canvases/{canvas_id}/edges",
+    response_model=MindEdgeOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_edge(
+    canvas_id: str,
+    edge_in: MindEdgeCreate,
+    service: MindService = Depends(_mind_service),
+):
+    """Crea una conexión visual entre dos Cards del mismo Canvas."""
+    return service.create_edge(canvas_id, edge_in)
+
+
+@router.delete(
+    "/canvases/{canvas_id}/edges/{edge_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_edge(
+    canvas_id: str,
+    edge_id: str,
+    service: MindService = Depends(_mind_service),
+):
+    """Elimina una conexión visual."""
+    service.remove_edge(canvas_id, edge_id)
+
+
 # --- Inbox ----------------------------------------------------------------
 
 
@@ -268,3 +312,47 @@ def create_capture(
 ):
     """Captura rápida: crea una Note canónica y la asocia al Inbox."""
     return service.create_capture(capture_in)
+
+
+
+
+# --- Historial (undo/redo) ----------------------------------------------
+
+@router.get('/canvases/{canvas_id}/history', response_model=MindHistoryOut)
+def get_canvas_history(
+    canvas_id: str,
+    service: MindService = Depends(_mind_service),
+):
+    """Obtiene el estado del historial: can_undo, can_redo, accion actual."""
+    return service.get_history(canvas_id)
+
+
+@router.post('/canvases/{canvas_id}/history/undo', response_model=MindHistoryOut)
+def undo_history(
+    canvas_id: str,
+    payload: MindHistoryTransition,
+    service: MindService = Depends(_mind_service),
+):
+    """Deshace la ultima accion (undo)."""
+    return service.undo(canvas_id, payload.expected_action_id, payload.idempotency_key)
+
+
+@router.post('/canvases/{canvas_id}/history/redo', response_model=MindHistoryOut)
+def redo_history(
+    canvas_id: str,
+    payload: MindHistoryTransition,
+    service: MindService = Depends(_mind_service),
+):
+    """Rehace la ultima accion deshecha (redo)."""
+    return service.redo(canvas_id, payload.expected_action_id, payload.idempotency_key)
+
+# --- Delete impact --------------------------------------------------------
+
+
+@router.get("/notes/{note_id}/delete-impact")
+def get_delete_impact(
+    note_id: str,
+    service: MindService = Depends(_mind_service),
+):
+    """Informa el impacto de eliminar una Note antes de confirmar."""
+    return service.get_delete_impact(note_id)

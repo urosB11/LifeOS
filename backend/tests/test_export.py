@@ -18,10 +18,10 @@ def test_export_returns_versioned_json(client):
     response = client.get("/api/v1/export")
     assert response.status_code == 200, response.text
     assert response.headers["content-type"].startswith("application/json")
-    assert response.headers["x-lifeos-format-version"] == "1"
+    assert response.headers["x-lifeos-format-version"] == "2"
 
     data = response.json()
-    assert data["format_version"] == 1
+    assert data["format_version"] == 2
     assert "exported_at" in data
     assert len(data["projects"]) == 1
     assert len(data["tasks"]) == 1

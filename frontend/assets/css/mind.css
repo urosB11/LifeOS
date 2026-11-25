@@ -1,4 +1,4 @@
-/* Life OS — estilos de Mind (MIND-002)
+/* Life OS — estilos de Mind (MIND-002/003)
  * Usa los tokens de vars.css; sin frameworks ni dependencias nuevas.
  */
 
@@ -167,11 +167,35 @@
   margin-bottom: 8px;
 }
 
+.mind-canvas__readonly {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+}
+
+.mind-canvas.is-readonly .mind-card {
+  opacity: 0.88;
+}
+
 .mind-canvas__toolbar-group {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   align-items: center;
+}
+
+.mind-canvas__toolbar .btn.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mind-canvas__selection-count {
+  min-width: 90px;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
 }
 
 .mind-canvas__zoom {
@@ -222,15 +246,64 @@
   transform-origin: 0 0;
 }
 
+.mind-canvas__edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mind-canvas__edge {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.mind-canvas__edge.is-selected {
+  stroke-width: 4;
+  stroke-dasharray: none;
+}
+
+.mind-canvas__selection-rect {
+  position: absolute;
+  z-index: 100001;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  pointer-events: none;
+}
+
 .mind-card {
   position: absolute;
+  box-sizing: border-box;
   width: 240px;
+  height: 160px;
+  min-width: 200px;
+  min-height: 120px;
   padding: 10px 12px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-raised);
   box-shadow: var(--shadow-sm);
   color: var(--text);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mind-card.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mind-card.is-connection-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
 }
 
 .mind-card:focus-visible {
@@ -243,7 +316,16 @@
   opacity: 0.95;
 }
 
+.mind-card--menu .mind-card__actions {
+  display: none;
+}
+
+.mind-card--has-menu .mind-card__actions {
+  display: flex;
+}
+
 .mind-card__head {
+  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   align-items: flex-start;
@@ -264,10 +346,15 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .mind-card__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   flex: 0 0 auto;
   opacity: 0;
@@ -281,14 +368,177 @@
 }
 
 .mind-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 190px;
+  max-height: none;
   overflow-y: auto;
 }
 
+.mind-card__connections {
+  flex: 0 0 auto;
+  max-height: 54px;
+  overflow-y: auto;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 4px;
+}
+
+.mind-card__connections ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+}
+
+.mind-card__connections li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mind-card__no-connections {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.mind-card__connection-link,
+.mind-card__connection-remove {
+  min-width: 0;
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.mind-card__connection-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mind-card__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm) 0 var(--radius-sm) 0;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: nwse-resize;
+  opacity: 0;
+  touch-action: none;
+}
+
+.mind-card.is-selected .mind-card__resize,
+.mind-card:focus-within .mind-card__resize,
+.mind-card:focus .mind-card__resize {
+  opacity: 1;
+}
+
+/* Menú contextual de la Card */
+.mind-card__menu-trigger {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.mind-card:hover .mind-card__menu-trigger,
+.mind-card:focus-within .mind-card__menu-trigger,
+.mind-card:focus .mind-card__menu-trigger {
+  opacity: 1;
+}
+
+.mind-card__menu-trigger:hover {
+  background: var(--surface-hover);
+}
+
+.mind-card__menu-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mind-card--menu .mind-card__menu-trigger {
+  opacity: 1;
+}
+
+.mind-card__menu {
+  position: absolute;
+  z-index: 1000;
+  min-width: 180px;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--font-size-sm);
+}
+
+.mind-card__menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mind-card__menu-item:hover,
+.mind-card__menu-item:focus-visible {
+  background: var(--surface-hover);
+  outline: none;
+}
+
+.mind-card__menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.mind-card__menu-item--danger {
+  color: var(--danger);
+}
+
+.mind-card__menu-item--danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.mind-card__menu-sep {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Editor de Card */
 .mind-card__editor {
   display: flex;
   flex-direction: column;
@@ -378,6 +628,57 @@
   color: var(--danger);
 }
 
+.mind-note-picker .modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.mind-note-picker__list {
+  max-height: min(50vh, 420px);
+  overflow-y: auto;
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.mind-note-picker__option {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mind-note-picker__option span {
+  margin-top: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.mind-note-picker__option:hover,
+.mind-note-picker__option:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.mind-note-picker__empty {
+  padding: 12px;
+  color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mind-card__actions,
+  .mind-card__menu-trigger {
+    transition: none;
+  }
+}
+
 /* --- Responsive ---------------------------------------------------------- */
 
 @media (max-width: 768px) {
@@ -402,5 +703,33 @@
     opacity: 1;
     width: 100%;
     justify-content: flex-end;
+  }
+
+  .mind-card__resize {
+    opacity: 1;
+  }
+
+  .mind-canvas__toolbar {
+    align-items: flex-start;
+  }
+
+  .mind-canvas__toolbar-group {
+    gap: 6px;
+  }
+
+  .mind-canvas__toolbar .btn,
+  .mind-card__actions .btn,
+  .mind-card__connection-link,
+  .mind-card__connection-remove {
+    min-height: 44px;
+  }
+
+  .mind-canvas__selection-count {
+    min-width: auto;
+    align-self: center;
+  }
+
+  .mind-card__menu-trigger {
+    opacity: 1;
   }
 }

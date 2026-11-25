@@ -1,11 +1,17 @@
-"""Repositorios de Mind: Spaces, Canvases, membresías y nodos (MIND-002)."""
+"""Repositorios de Mind: Spaces, Canvases, membresías, nodos y edges (MIND-002/003)."""
 
 from __future__ import annotations
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.modules.mind.models import MindCanvas, MindCanvasNode, MindSpace, MindSpaceNote
+from app.modules.mind.models import (
+    MindCanvas,
+    MindCanvasEdge,
+    MindCanvasNode,
+    MindSpace,
+    MindSpaceNote,
+)
 from app.modules.mind.schemas import (
     MindCanvasCreate,
     MindCanvasUpdate,
@@ -240,3 +246,71 @@ class MindNodeRepository:
     def delete(self, node: MindCanvasNode) -> None:
         self.db.delete(node)
         self.db.flush()
+
+
+class MindEdgeRepository:
+    """Acceso a datos de conexiones visuales (edges) sobre un Canvas."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def list_for_canvas(self, canvas_id: str) -> list[MindCanvasEdge]:
+        stmt = (
+            select(MindCanvasEdge)
+            .where(MindCanvasEdge.canvas_id == canvas_id)
+            .order_by(MindCanvasEdge.created_at)
+        )
+        return list(self.db.execute(stmt).scalars().all())
+
+    def get(self, edge_id: str) -> MindCanvasEdge | None:
+        stmt = select(MindCanvasEdge).where(MindCanvasEdge.id == edge_id)
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def find_by_canvas_and_nodes(
+        self, canvas_id: str, source_id: str, target_id: str
+    ) -> MindCanvasEdge | None:
+        # La pareja se almacena normalizada (source < target)
+        a, b = sorted([source_id, target_id])
+        stmt = select(MindCanvasEdge).where(
+            MindCanvasEdge.canvas_id == canvas_id,
+            MindCanvasEdge.source_node_id == a,
+            MindCanvasEdge.target_node_id == b,
+        )
+        return self.db.execute(stmt).scalar_one_or_none()
+
+    def create(
+        self,
+        canvas_id: str,
+        source_id: str,
+        target_id: str,
+        source_anchor: int = 0,
+        target_anchor: int = 0,
+    ) -> MindCanvasEdge:
+        a, b = sorted([source_id, target_id])
+        edge = MindCanvasEdge(
+            canvas_id=canvas_id,
+            source_node_id=a,
+            target_node_id=b,
+            source_anchor=source_anchor if source_id == a else target_anchor,
+            target_anchor=target_anchor if target_id == b else source_anchor,
+        )
+        self.db.add(edge)
+        self.db.flush()
+        return self.get(edge.id)
+
+    def delete(self, edge: MindCanvasEdge) -> None:
+        self.db.delete(edge)
+        self.db.flush()
+
+    def delete_by_node(self, canvas_id: str, node_id: str) -> int:
+        """Elimina todas las edges conectadas a un nodo. Devuelve cantidad eliminada."""
+        stmt = select(MindCanvasEdge).where(
+            MindCanvasEdge.canvas_id == canvas_id,
+            (MindCanvasEdge.source_node_id == node_id)
+            | (MindCanvasEdge.target_node_id == node_id),
+        )
+        edges = list(self.db.execute(stmt).scalars().all())
+        for edge in edges:
+            self.db.delete(edge)
+        self.db.flush()
+        return len(edges)
