@@ -75,3 +75,24 @@ def test_timezone_defaults_to_arg_cordoba(client):
     response = client.get("/api/v1/settings/timezone")
     assert response.status_code == 200
     assert response.json()["timezone"] == "America/Argentina/Cordoba"
+
+
+def test_configured_timezone_is_used_by_local_clock(db, monkeypatch):
+    """El reloj local usa la preferencia guardada, no siempre la zona default."""
+    from datetime import UTC, date, datetime
+
+    from app.core import clock
+    from app.modules.dashboard.repository import UserPreferenceRepository
+
+    UserPreferenceRepository(db).upsert("timezone", "Pacific/Kiritimati")
+
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            instant = datetime(2026, 11, 22, 17, 0, tzinfo=UTC)
+            return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
+
+    monkeypatch.setattr(clock, "datetime", FixedDateTime)
+
+    assert clock.get_timezone(db) == "Pacific/Kiritimati"
+    assert clock.local_today(db) == date(2026, 11, 23)

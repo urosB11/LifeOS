@@ -36,4 +36,11 @@
 
 ---
 
+### ADR-003: Grid persistente para la personalización de Home
+- **Fecha:** 2026-11-22
+- **Estado:** Aceptada
+- **Decidido por:** Product Owner
+- **Archivo:** docs/factory/decisions/ADR-003-home-widget-grid-layout.md
+- **Resumen:** Extender las preferencias de widgets con spans validados y orden global en un grid responsive, manteniendo SQLite/API/exportación como fuentes persistentes.
+
 *(Agregar nuevas entradas debajo de esta línea)*

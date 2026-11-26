@@ -141,6 +141,12 @@ class MindCanvasNode(Base):
             "note_id",
             name="uq_mind_canvas_nodes_canvas_id_note_id",
         ),
+        Index(
+            "uq_mind_canvas_nodes_canvas_id_id",
+            "canvas_id",
+            "id",
+            unique=True,
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
@@ -180,7 +186,8 @@ class MindCanvasEdge(Base):
       para evitar duplicados A→B y B→A.
     - `source_anchor`/`target_anchor` ∈ [0..7] indican el punto de anclaje
       en el perímetro de cada Card (0=centro sup, 1=esq sup der, ...).
-    - FK simple a mind_canvas_nodes.id + CHECK para validar mismo canvas.
+    - FKs compuestas a (canvas_id, id) para exigir que ambos extremos
+      pertenezcan al mismo Canvas.
     - ON DELETE CASCADE: al borrar una Card, sus conexiones se eliminan.
     """
 
@@ -188,18 +195,13 @@ class MindCanvasEdge(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ["source_node_id"],
-            ["mind_canvas_nodes.id"],
+            ["canvas_id", "source_node_id"],
+            ["mind_canvas_nodes.canvas_id", "mind_canvas_nodes.id"],
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
-            ["target_node_id"],
-            ["mind_canvas_nodes.id"],
-            ondelete="CASCADE",
-        ),
-        ForeignKeyConstraint(
-            ["canvas_id"],
-            ["mind_canvases.id"],
+            ["canvas_id", "target_node_id"],
+            ["mind_canvas_nodes.canvas_id", "mind_canvas_nodes.id"],
             ondelete="CASCADE",
         ),
         UniqueConstraint(
@@ -235,22 +237,28 @@ class MindCanvasEdge(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     canvas_id: Mapped[str] = mapped_column(
         String(36),
-        ForeignKey("mind_canvases.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     source_node_id: Mapped[str] = mapped_column(
         String(36),
         nullable=False,
-        index=True,
     )
     target_node_id: Mapped[str] = mapped_column(
         String(36),
         nullable=False,
-        index=True,
     )
-    source_anchor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    target_anchor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_anchor: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
+    target_anchor: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
     created_at: Mapped[str] = mapped_column(String(32), nullable=False, default=utc_now)
     updated_at: Mapped[str] = mapped_column(
         String(32), nullable=False, default=utc_now, onupdate=utc_now
@@ -263,22 +271,28 @@ class MindCanvasEdge(Base):
 class MindCanvasHistory(Base):
     """Historial espacial reversible y acotado por Canvas (MIND-003).
 
-    Almacena snapshots de operaciones para soportar undo/redo.
-    - action_type: tipo de operacion (create_node, update_node, delete_node,
-      create_edge, delete_edge, reorder, batch).
-    - snapshot_json: estado del Canvas antes de la accion (nodos, edges, z-index).
-    - inverse_json: operacion inversa para redo (cuando corresponde).
-    - request_key: clave idempotente de la solicitud original.
-    - Acotado: se purgan entradas antiguas por Canvas (p. ej., 100 ultimas).
+    - `sequence` ordena de forma determinista las acciones del Canvas.
+    - `state` distingue acciones aplicadas, deshechas y descartadas.
+    - `request_key` identifica de forma idempotente la mutación original.
+    - Los snapshots guardan solo el estado visual; nunca el cuerpo de las Notes.
     """
 
     __tablename__ = "mind_canvas_history"
 
     __table_args__ = (
-        ForeignKeyConstraint(
-            ["canvas_id"],
-            ["mind_canvases.id"],
-            ondelete="CASCADE",
+        UniqueConstraint(
+            "canvas_id",
+            "sequence",
+            name="uq_mind_canvas_history_canvas_sequence",
+        ),
+        UniqueConstraint(
+            "canvas_id",
+            "request_key",
+            name="uq_mind_canvas_history_canvas_request_key",
+        ),
+        CheckConstraint(
+            "state IN ('applied', 'undone', 'discarded')",
+            name="ck_mind_canvas_history_state",
         ),
         Index(
             "ix_mind_canvas_history_canvas_created",
@@ -292,12 +306,16 @@ class MindCanvasHistory(Base):
         String(36),
         ForeignKey("mind_canvases.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     action_type: Mapped[str] = mapped_column(String(30), nullable=False)
     snapshot_json: Mapped[str] = mapped_column(Text, nullable=False)
     inverse_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     request_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    state: Mapped[str] = mapped_column(
+        String(12), nullable=False, default="applied", server_default="applied"
+    )
+    undone_at: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[str] = mapped_column(String(32), nullable=False, default=utc_now)
 
     def __repr__(self) -> str:  # pragma: no cover

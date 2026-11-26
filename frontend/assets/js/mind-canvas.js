@@ -13,6 +13,7 @@ import {
   showFormModal,
 } from "./mind-common.js";
 import {
+  anchorPoint,
   cardHeaderMode,
   pickEdgeAnchors,
   DEFAULT_CARD_WIDTH,
@@ -80,6 +81,11 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
   statusEl.className = "mind-canvas__status";
   statusEl.setAttribute("role", "status");
   statusEl.setAttribute("aria-live", "polite");
+  statusEl.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-action]")?.dataset.action;
+    if (action === "retry") retrySave();
+    if (action === "cancel-pending") cancelPendingSave();
+  });
 
   function setStatus(text, tone = "") {
     statusEl.className = `mind-canvas__status ${tone}`.trim();
@@ -127,6 +133,14 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
     };
   }
 
+  function compareNodes(a, b) {
+    if (a.z_index !== b.z_index) return a.z_index - b.z_index;
+    if (a.created_at !== b.created_at) {
+      return a.created_at < b.created_at ? -1 : 1;
+    }
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  }
+
   function fitToContent() {
     if (!nodes.length) {
       scale = 1;
@@ -159,8 +173,9 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
   async function persistSpatialAction(action, draft, key = crypto.randomUUID?.() || `mind-${Date.now()}-${Math.random().toString(36).slice(2)}`) {
     pendingSave = { action, draft, key, saving: true };
     setStatus("Guardando cambios…", "is-saving");
+    let result;
     try {
-      const result = await apiJson(
+      result = await apiJson(
         `${apiBase}/mind/canvases/${canvasId}/spatial-actions`,
         {
           method: "POST",
@@ -168,24 +183,39 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
           headers: { "Idempotency-Key": key },
         }
       );
-      draft.forEach(({ node, values }) => {
-        Object.assign(node, values);
-        node.savedX = node.x;
-        node.savedY = node.y;
-        node.savedWidth = node.width;
-        node.savedHeight = node.height;
-        node.savedZIndex = node.z_index;
-      });
-      pendingSave = null;
-      if (action.action_type === "reorder") await refreshSpatialState();
-      else renderNodes();
-      updateHistoryControls();
-      setStatus("Cambios guardados", "is-saved");
     } catch (err) {
       if (pendingSave) pendingSave.saving = false;
       setStatus(`Cambios pendientes: ${err.message}`, "is-error");
       showToast(err.message || "No se pudieron guardar los cambios", "error");
+      return;
     }
+
+    history = result;
+    draft.forEach(({ node, values }) => {
+      Object.assign(node, values);
+      node.savedX = node.x;
+      node.savedY = node.y;
+      node.savedWidth = node.width;
+      node.savedHeight = node.height;
+      node.savedZIndex = node.z_index;
+    });
+    pendingSave = null;
+    if (action.action_type === "reorder") {
+      try {
+        await refreshSpatialState();
+      } catch (err) {
+        setStatus(
+          `Cambios guardados; no se pudo actualizar la vista del Canvas: ${err.message}`,
+          "is-error"
+        );
+        showToast("Los cambios se guardaron, pero la vista quedó desactualizada", "warning");
+        return;
+      }
+    } else {
+      renderNodes();
+    }
+    updateHistoryControls();
+    setStatus("Cambios guardados", "is-saved");
   }
 
   function persistMove(drafts) {
@@ -439,7 +469,7 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
     const focusedNodeId = focusedCard?.dataset.nodeId;
     world.innerHTML = `${edgeSvgHtml()}${nodes
       .slice()
-      .sort((a, b) => a.z_index - b.z_index)
+      .sort(compareNodes)
       .map(cardHtml)
       .join("")}`;
     const empty = bodyEl.querySelector("#mind-canvas-empty");
@@ -456,8 +486,9 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
         const source = nodeById(edge.source_node_id);
         const target = nodeById(edge.target_node_id);
         if (!source || !target) return "";
-        const anchors = pickEdgeAnchors(source, target);
-        return `<line class="mind-canvas__edge${selectedEdgeId === edge.id ? " is-selected" : ""}" data-edge-id="${edge.id}" x1="${anchors.sourcePoint.x}" y1="${anchors.sourcePoint.y}" x2="${anchors.targetPoint.x}" y2="${anchors.targetPoint.y}" />`;
+        const sourcePoint = anchorPoint(source, edge.source_anchor);
+        const targetPoint = anchorPoint(target, edge.target_anchor);
+        return `<line class="mind-canvas__edge${selectedEdgeId === edge.id ? " is-selected" : ""}" data-edge-id="${edge.id}" x1="${sourcePoint.x}" y1="${sourcePoint.y}" x2="${targetPoint.x}" y2="${targetPoint.y}" />`;
       })
       .join("");
     return `<svg class="mind-canvas__edges" aria-hidden="true" focusable="false">${lines}</svg>`;
@@ -523,20 +554,25 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
   }
 
   async function setOrder(node, direction) {
-    const ordered = nodes
-      .slice()
-      .sort((a, b) => a.z_index - b.z_index || a.id.localeCompare(b.id));
+    const ordered = nodes.slice().sort(compareNodes);
     const current = ordered.findIndex((item) => item.id === node.id);
     const target = direction === "front" ? ordered.length - 1 : 0;
     if (current === target) return;
+    ordered.splice(current, 1);
+    ordered.splice(target, 0, node);
+    const drafts = ordered.map((item, index) => ({
+      node: item,
+      values: { z_index: index },
+    }));
     await persistSpatialAction(
-      { action_type: "reorder", nodes: [{ id: node.id, z_index: target }] },
-      [
-        {
-          node,
-          values: { z_index: target },
-        },
-      ]
+      {
+        action_type: "reorder",
+        nodes: ordered.map((item, index) => ({
+          id: item.id,
+          z_index: index,
+        })),
+      },
+      drafts
     );
   }
 
@@ -547,11 +583,19 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
       setStatus("Elegí otra Card para crear la conexión", "");
       return;
     }
+    const source = nodeById(sourceId);
+    const target = nodeById(targetId);
+    const anchors = source && target ? pickEdgeAnchors(source, target) : null;
     await runIdempotentRequest(
       `${apiBase}/mind/canvases/${canvasId}/edges`,
       {
         method: "POST",
-        body: { source_node_id: sourceId, target_node_id: targetId },
+        body: {
+          source_node_id: sourceId,
+          target_node_id: targetId,
+          source_anchor: anchors?.sourceAnchor ?? 0,
+          target_anchor: anchors?.targetAnchor ?? 0,
+        },
       },
       async (edge) => {
         if (!edges.some((item) => item.id === edge.id)) edges.push(edge);
@@ -768,16 +812,27 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
         `${apiBase}/mind/canvases/${canvasId}/history/${action}`,
         {
           method: "POST",
-          body: { expected_action_id: actionId },
+          body: {
+            expected_action_id: actionId,
+            idempotency_key: key,
+          },
           headers: { "Idempotency-Key": key },
         }
       );
-      pendingSave = null;
-      await refreshSpatialState();
-      setStatus(undo ? "Acción deshecha" : "Acción rehecha", "is-saved");
     } catch (err) {
       if (pendingSave) pendingSave.saving = false;
       setStatus(`No se pudo ${undo ? "deshacer" : "rehacer"}: ${err.message}`, "is-error");
+      return;
+    }
+    pendingSave = null;
+    try {
+      await refreshSpatialState();
+      setStatus(undo ? "Acción deshecha" : "Acción rehecha", "is-saved");
+    } catch (err) {
+      setStatus(
+        `Acción ${undo ? "deshecha" : "rehecha"}; no se pudo actualizar la vista: ${err.message}`,
+        "is-error"
+      );
     }
   }
 
@@ -1056,10 +1111,6 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
           node,
           values: { x: node.x, y: node.y },
         }));
-        entries.forEach(({ node, originX, originY }) => {
-          node.x = originX;
-          node.y = originY;
-        });
         persistMove(drafts);
       }
       dragState = null;
@@ -1690,7 +1741,6 @@ export async function renderMindCanvasView(container, apiBase, canvasId) {
     });
     bodyEl.querySelector("#mind-zoom-fit").addEventListener("click", fitToContent);
     bodyEl.querySelector("#mind-new-card").addEventListener("click", createCard);
-    bodyEl.querySelector("#mind-first-card").addEventListener("click", createCard);
     bodyEl.querySelector("#mind-add-note").addEventListener("click", addExistingNote);
     bodyEl.querySelector("#mind-remove-edge").addEventListener("click", () => {
       if (selectedEdgeId) removeEdge(selectedEdgeId);

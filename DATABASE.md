@@ -1,8 +1,8 @@
 # Life OS — Diseño de base de datos
 
-**Estado:** línea base de datos del MVP 0.1, Fase 7 (Hábitos) y MIND-002 (Mind core)
-**Versión:** 0.5
-**Fecha:** 22 de noviembre de 2026
+**Estado:** línea base de datos del MVP 0.1, Fase 7 (Hábitos), Home widget grid y Mind Canvas reversible
+**Versión:** 0.6
+**Fecha:** 25 de noviembre de 2026
 **Relacionado con:** `VISION.md`, `REQUIREMENTS.md`, `ARCHITECTURE.md`, `SECURITY.md`, `docs/factory/work/MIND-002/SPEC.md`
 
 > Este documento define el modelo lógico del MVP. La implementación SQL concreta se realizará con SQLAlchemy 2.x y migraciones Alembic. Las tablas de dominio son la fuente de verdad; `activity_events` conserva historial complementario, no reemplaza el estado actual.
@@ -22,7 +22,7 @@ Conservar tareas, proyectos, notas, etiquetas, hábitos, sus registros diarios, 
 | `note_task_links` | Relación muchos-a-muchos nota/tarea. |
 | `tags` | Catálogo compartido de etiquetas. |
 | `note_tags` | Asignaciones muchos-a-muchos nota/etiqueta. |
-| `widget_preferences` | Visibilidad y orden de widgets. |
+| `widget_preferences` | Visibilidad, orden y dimensiones lógicas de los widgets. |
 | `user_preferences` | Preferencias básicas de la instalación. |
 | `activity_events` | Historial de cambios relevantes. |
 | `habits` | Hábitos con frecuencia, estado y objetivo opcional (Fase 7). |
@@ -30,9 +30,11 @@ Conservar tareas, proyectos, notas, etiquetas, hábitos, sus registros diarios, 
 | `mind_spaces` | Contextos de trabajo de Mind y el Inbox único (MIND-002). |
 | `mind_canvases` | Superficies visuales dentro de un Space (MIND-002). |
 | `mind_space_notes` | Membresía de una Note en un Space (capturas del Inbox). |
-| `mind_canvas_nodes` | Instancia visual de una Note sobre un Canvas (posición y tamaño). |
+| `mind_canvas_nodes` | Instancia visual de una Note sobre un Canvas (posición, tamaño y orden). |
+| `mind_canvas_edges` | Conexiones visuales no dirigidas entre Cards del mismo Canvas. |
+| `mind_canvas_history` | Historial espacial reversible y acotado por Canvas. |
 
-No crear tablas para Work, Business, Finance, integraciones o agentes hasta que sus requisitos estén definidos. Mind (MIND-002) cubre Spaces, Inbox, Canvases y Cards simples con su propio modelo; las relaciones semánticas, los documentos por bloques y los Orbes siguen sin tablas hasta que exista su SPEC.
+No crear tablas para Work, Business, Finance, integraciones o agentes hasta que sus requisitos estén definidos. Mind cubre Spaces, Inbox, Canvases, Cards, conexiones visuales e historial espacial reversible. Las relaciones semánticas, los documentos por bloques y los Orbes siguen sin tablas hasta que exista su SPEC.
 
 ## 3. Convenciones
 
@@ -60,6 +62,8 @@ Las tablas de unión usan claves primarias compuestas cuando corresponde. `widge
 - Habit entry status: `pending`, `completed`, `skipped`.
 - Mind space status: `active`, `archived`.
 - Mind canvas status: `active`, `archived`.
+- Edge anchor: entero `0..7`; `0` representa el centro superior y los demás puntos siguen el perímetro en sentido horario.
+- Mind history state: `applied`, `undone` o `discarded`.
 - Guardar valores estables en inglés en la base; localizar etiquetas solo en interfaz.
 - No almacenar valores calculables salvo que sean necesarios para preservar un evento histórico.
 
@@ -77,6 +81,8 @@ habits 1 ─────────── N habit_entries
 mind_spaces 1 ─────── N mind_canvases
 mind_spaces N ──────── N notes      (mind_space_notes)
 mind_canvases N ────── N notes      (mind_canvas_nodes)
+mind_canvas_nodes 1 ── N mind_canvas_edges (extremos source/target)
+mind_canvases 1 ───── N mind_canvas_history
 
 widget_preferences  (catálogo de widgets definido en código)
 user_preferences    (preferencias simples)
@@ -180,11 +186,13 @@ PK compuesta (`note_id`, `tag_id`). Eliminar una nota elimina sus asignaciones, 
 |---|---|---|
 | `widget_id` | TEXT | PK; ID estable del catálogo en código. |
 | `is_visible` | INTEGER/BOOLEAN | Obligatorio. |
-| `position` | INTEGER | Obligatorio, no negativo. |
+| `position` | INTEGER | Obligatorio, no negativo; orden global de auto-colocación. |
+| `column_span` | INTEGER | Obligatorio; entero validado entre 2 y 6. |
+| `row_span` | INTEGER | Obligatorio; entero validado entre 1 y 3. |
 | `config_json` | TEXT | Nullable; solo opciones validadas del widget. |
 | `updated_at` | TEXT | Instante UTC obligatorio. |
 
-IDs del catálogo MVP: `upcoming_tasks`, `active_projects`, `quick_add_task`, `quick_add_note`. El orden inicial sigue ese orden. Si no existe preferencia guardada, se utilizan los defaults del catálogo.
+IDs del catálogo MVP: `upcoming_tasks`, `active_projects`, `quick_add_task`, `quick_add_note`, `habits_today` y `habits_week`. Los defaults de spans son específicos del catálogo. La migración transforma el orden anterior por zonas intercalando cada widget de `main` con el grupo Captura rápida y luego el siguiente widget de `main`; conserva el orden relativo previo dentro de cada zona y coloca `full` al final. El orden relativo y la visibilidad de las acciones del grupo Captura rápida se conservan. Si no existe preferencia guardada, se utilizan los defaults del catálogo.
 
 ### 5.9 `user_preferences`
 
@@ -318,7 +326,39 @@ Membresía Note↔Space. Las capturas del Inbox son Notes con una fila en esta t
 | `created_at` | TEXT | Instante UTC obligatorio. |
 | `updated_at` | TEXT | Instante UTC obligatorio. |
 
-Restricción `UNIQUE(canvas_id, note_id)`: una Note tiene como máximo una representación por Canvas, pero puede representarse en varios Canvases. El nodo guarda solo la instancia visual; el texto vive en `notes`. Quitar un nodo no elimina la Note; eliminar la Note elimina sus nodos (`ON DELETE CASCADE`).
+Restricción `UNIQUE(canvas_id, note_id)`: una Note tiene como máximo una representación por Canvas, pero puede representarse en varios Canvases. El nodo guarda solo la instancia visual; el texto vive en `notes`. Quitar un nodo no elimina la Note; eliminar la Note elimina sus nodos (`ON DELETE CASCADE`). El índice adicional `UNIQUE(canvas_id, id)` permite exigir que ambos extremos de una edge pertenezcan al Canvas indicado.
+
+### 5.17 `mind_canvas_edges`
+
+| Campo | Tipo | Regla |
+|---|---|---|
+| `id` | TEXT | PK UUIDv4. |
+| `canvas_id` | TEXT | Parte de las dos FK compuestas hacia `mind_canvas_nodes`. |
+| `source_node_id` | TEXT | Extremo origen; FK compuesta `(canvas_id, source_node_id)`. |
+| `target_node_id` | TEXT | Extremo destino; FK compuesta `(canvas_id, target_node_id)`. |
+| `source_anchor` | INTEGER | Anclaje `0..7`; default `0`. |
+| `target_anchor` | INTEGER | Anclaje `0..7`; default `0`. |
+| `created_at` | TEXT | Instante UTC obligatorio. |
+| `updated_at` | TEXT | Instante UTC obligatorio. |
+
+La conexión es no dirigida: el par se normaliza guardando el menor ID en `source_node_id`. `UNIQUE(canvas_id, source_node_id, target_node_id)` impide duplicados; `CHECK(source_node_id < target_node_id)` impide bucles; dos CHECK limitan los anclajes a `0..7`. Las FK compuestas exigen que ambos extremos existan y pertenezcan al mismo Canvas. Eliminar cualquiera de sus Cards o el Canvas elimina la edge por cascada.
+
+### 5.18 `mind_canvas_history`
+
+| Campo | Tipo | Regla |
+|---|---|---|
+| `id` | TEXT | PK UUIDv4. |
+| `canvas_id` | TEXT | FK a `mind_canvases.id`, `ON DELETE CASCADE`. |
+| `sequence` | INTEGER | Secuencia determinista y positiva dentro del Canvas. |
+| `action_type` | TEXT | Tipo estable de la acción reversible. |
+| `snapshot_json` | TEXT | Estado visual anterior y metadatos de la acción. |
+| `inverse_json` | TEXT | Nullable; estado visual posterior pararedo. |
+| `request_key` | TEXT | Nullable; clave idempotente de la mutación original. |
+| `state` | TEXT | `applied`, `undone` o `discarded`; default `applied`. |
+| `undone_at` | TEXT | Nullable; instante de la transición a `undone`. |
+| `created_at` | TEXT | Instante UTC obligatorio. |
+
+`UNIQUE(canvas_id, sequence)` conserva un orden determinista. `UNIQUE(canvas_id, request_key)` evita aplicar dos veces la misma mutación; varios `NULL` siguen siendo admitidos por SQLite. Un CHECK restringe `state` a los tres valores válidos. El servicio conserva como máximo 100 acciones reversibles por Canvas; al podar una acción con clave, conserva un recibo no reversible con su fingerprint para que un retry tardío no duplique efectos. Los snapshots contienen IDs, geometría, orden y conexiones, pero nunca título ni cuerpo de Notes.
 
 ## 6. Integridad y eliminación
 
@@ -330,7 +370,9 @@ Restricción `UNIQUE(canvas_id, note_id)`: una Note tiene como máximo una repre
 - `habit_entries.habit_id` usa `ON DELETE RESTRICT`: no se puede eliminar físicamente un hábito que conserve registros; archivar es la operación preferida.
 - `mind_spaces.is_inbox` tiene un índice único parcial: la BD no admite un segundo Inbox.
 - `mind_canvases.space_id`, `mind_space_notes.space_id` y `mind_space_notes.note_id` usan `ON DELETE CASCADE`; `mind_canvas_nodes.canvas_id` y `mind_canvas_nodes.note_id` también.
-- Eliminar una Note elimina sus membresías en Spaces y sus representaciones visuales: no quedan referencias Mind huérfanas.
+- Las FK compuestas de `mind_canvas_edges` exigen que ambos extremos pertenezcan al Canvas indicado; `ON DELETE CASCADE` elimina las conexiones al borrar una Card o el Canvas.
+- `mind_canvas_history.canvas_id` usa `ON DELETE CASCADE`: al borrar un Canvas se elimina su historial.
+- Eliminar una Note elimina sus membresías en Spaces y sus representaciones visuales: no quedan referencias Mind huérfanas. Antes, el servicio purga el historial de todo Canvas que la mencione en el estado actual o en un snapshot, para que undo/redo no pueda resucitar una Note inexistente.
 - Archivar un Space o un Canvas no elimina contenido canónico ni Canvases; restaurarlos es la operación inversa.
 - Eliminar o mover un Space nunca borra Notes.
 - No hay cascadas desde Projects a Tasks ni desde Habits a HabitEntries.
@@ -356,6 +398,10 @@ Crear índices para consultas reales del MVP:
 - `mind_space_notes(note_id)` (la PK compuesta ya cubre `space_id`);
 - `mind_canvas_nodes(canvas_id)`, `mind_canvas_nodes(note_id)`;
 - `mind_canvas_nodes UNIQUE(canvas_id, note_id)` (restricción, no índice adicional);
+- `mind_canvas_nodes UNIQUE(canvas_id, id)` (soporte de las FK compuestas de edges);
+- `mind_canvas_edges(canvas_id, source_node_id)`, `mind_canvas_edges(canvas_id, target_node_id)`;
+- `mind_canvas_history(canvas_id, created_at)`;
+- `mind_canvas_history UNIQUE(canvas_id, sequence)` y `UNIQUE(canvas_id, request_key)` (restricciones);
 - `activity_events(entity_type, entity_id, occurred_at)`;
 - `activity_events(event_type, occurred_at)`.
 
@@ -394,9 +440,9 @@ Si el denominador es cero (sin días programados en el período), mostrar “Sin
 
 ### 9.1 Exportación JSON
 
-La exportación incluye `format_version`, `exported_at`, `projects`, `tasks`, `notes`, `note_project_links`, `note_task_links`, `tags`, `note_tags`, `habits`, `habit_entries`, `mind_spaces`, `mind_canvases`, `mind_space_notes`, `mind_canvas_nodes`, `widget_preferences`, `user_preferences` y `activity_events`. Se define de manera independiente del ORM y conserva IDs y relaciones.
+La exportación incluye `format_version`, `exported_at`, `projects`, `tasks`, `notes`, `note_project_links`, `note_task_links`, `tags`, `note_tags`, `habits`, `habit_entries`, `mind_spaces`, `mind_canvases`, `mind_space_notes`, `mind_canvas_nodes`, `mind_canvas_edges`, `mind_canvas_history`, `widget_preferences`, `user_preferences` y `activity_events`. Se define de manera independiente del ORM y conserva IDs, relaciones, snapshots, secuencias, estados de historial y preferencias `position`, `column_span` y `row_span`. El cambio de forma incrementa `format_version`.
 
-No se implementa importación de JSON desde la interfaz en el MVP.
+La importación JSON acepta las versiones soportadas y realiza un merge no destructivo e idempotente por clave primaria; no sobrescribe registros existentes. Valida campos desconocidos, claves primarias, columnas obligatorias, secuencia/estado y JSON de historial antes de escribir. Toda la importación se ejecuta dentro de una transacción: un error de integridad revierte el payload completo y no invalida la sesión ni deja datos parciales.
 
 ### 9.2 Backup SQLite
 
@@ -409,6 +455,8 @@ Antes de restaurar, crear una copia adicional de la base actual. Validar que el 
 ## 10. Migraciones
 
 SQLAlchemy 2.x gestiona modelos y sesiones; Alembic gestiona cambios versionados de esquema. Cada cambio de esquema requiere migración, pruebas sobre base temporal y actualización de este documento. No usar `create_all()` como sustituto de migraciones en entornos con datos existentes.
+
+El grafo integrado tiene dos ramas desde `0005_habits`: `0006_home_widget_grid` para la grilla de Home y `0006_mind` → `0007_mind_canvas_edges` → `0008_mind_canvas_history` para Mind. `0009_merge_evolution_mind` es el único mergepoint y depende de `0006_home_widget_grid` y `0008_mind_canvas_history`. La revisión `0008` reconstruye las tablas legacy de edges/historial hacia el esquema final con FK compuestas, CHECKs, secuencias e índices. `backend/verify_migrations.py` valida upgrade, downgrade/re-upgrade, convergencia desde esquema legacy, `integrity_check`, `foreign_key_check` y `alembic check` exclusivamente sobre bases temporales.
 
 ## 11. Ubicación de la base
 
@@ -443,18 +491,25 @@ La aplicación crea el directorio si no existe e informa errores de permisos o e
 19. Cards: crear, editar por el API canónico de Notes, mover (posición persistida) y quitar sin borrar la Note.
 20. Eliminar una Note elimina sus membresías y nodos, sin dejar referencias Mind huérfanas.
 21. Exportación JSON, backup y restauración con los datos de Mind, conservando IDs y referencias.
+22. Edges: pertenencia de ambos extremos al Canvas, par no dirigido único, anclajes `0..7` y cascadas.
+23. Historial: acción grupal atómica, undo/redo con `expected_action_id`, reintentos idempotentes, recorte a 100 acciones y rechazo de snapshots inválidos sin cambios parciales.
+24. Eliminar una Note purga también el historial de Canvases que solo la mencionan en snapshots históricos.
+25. Importación JSON atómica e idempotente, incluidos `mind_canvas_history`, IDs, secuencias, estados y snapshots.
 
 ## 13. Decisiones cerradas y límites
 
-No quedan decisiones de modelo bloqueantes para iniciar el MVP. Se adoptan UUIDv4 texto, prioridades `low/normal/high` opcionales, proyectos `active/completed/archived`, archivado preferido y borrado restringido, notas muchos-a-muchos con proyectos y tareas, etiquetas reutilizables sin renombrado en el MVP, widgets iniciales definidos arriba y JSON como formato de exportación. La restauración de backup SQLite es documentada; la importación desde JSON queda fuera de alcance.
+No quedan decisiones de modelo bloqueantes para iniciar el MVP. Se adoptan UUIDv4 texto, prioridades `low/normal/high` opcionales, proyectos `active/completed/archived`, archivado preferido y borrado restringido, notas muchos-a-muchos con proyectos y tareas, etiquetas reutilizables sin renombrado en el MVP, widgets iniciales definidos arriba y JSON versionado como formato de exportación e importación. La importación es un merge no destructivo e idempotente por clave primaria; la restauración de backup SQLite es documentada.
 
 Cualquier cambio de este modelo requiere actualizar las pruebas, la migración y la documentación relacionada antes de implementarlo.
 
-### 13.1 Decisiones de Mind (MIND-002)
+### 13.1 Decisiones de Mind (MIND-002/003)
 
 - El contenido canónico de una Card es una Note: Mind no duplica ni copia texto.
 - La instancia visual (posición, tamaño y orden) vive en `mind_canvas_nodes`; quitar el nodo no borra la Note.
 - El Inbox es un Space reservado con `is_inbox = 1` y un índice único parcial que garantiza su unicidad en la base.
 - Las coordenadas de las Cards son del mundo, no del viewport: el mismo Canvas se abre igual en distintas pantallas.
-- No hay borrado físico de Spaces ni Canvases en esta entrega: el archivado es la operación preferida y reversible.
-- No existen tablas de conexiones entre Cards, relaciones semánticas ni documentos por bloques: corresponden a MIND-003 y MIND-004.
+- No hay borrado físico de Spaces ni Canvases desde la interfaz: el archivado es la operación preferida y reversible.
+- Las conexiones visuales son no dirigidas, propias del Canvas y no contienen contenido canónico; sus anclajes se persisten.
+- El historial espacial es reversible, acotado a 100 acciones por Canvas y conserva recibos idempotentes de mutaciones ya podadas.
+- Los snapshots guardan solo estado visual. Antes de eliminar una Note, el servicio purga el historial de los Canvases afectados para impedir una restauración inválida.
+- No existen tablas para relaciones semánticas ni documentos por bloques: corresponden a MIND-004.

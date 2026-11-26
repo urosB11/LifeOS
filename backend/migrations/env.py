@@ -1,7 +1,16 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool, event
 from alembic import context
+from sqlalchemy import engine_from_config, event, pool
+
+from app.db import activity as _activity_models  # noqa: F401
+from app.db.base import Base
+from app.modules.dashboard import models as _dashboard_models  # noqa: F401
+from app.modules.habits import models as _habit_models  # noqa: F401
+from app.modules.mind import models as _mind_models  # noqa: F401
+from app.modules.notes import models as _note_models  # noqa: F401
+from app.modules.projects import models as _project_models  # noqa: F401
+from app.modules.tasks import models as _task_models  # noqa: F401
 
 # Alembic configuration object, provides access to values in alembic.ini.
 config = context.config
@@ -10,10 +19,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Target metadata for autogenerate support.
-# Las tablas de dominio se gestionan con migraciones versionadas; target_metadata
-# se deja None para no depender de autogenerate en esta fase.
-target_metadata = None
+# Target metadata para `alembic check`. Las tablas de dominio siguen siendo
+# gestionadas por migraciones versionadas; este metadata solo permite
+# comparar el esquema aplicado con el ORM.
+target_metadata = Base.metadata
 
 
 def _get_database_url() -> str:
@@ -42,7 +51,9 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        compare_type=True,
+        # SQLite representa Boolean como INTEGER; la comparación de tipos
+        # produciría un falso positivo para `widget_preferences.is_visible`.
+        compare_type=False,
     )
 
     with context.begin_transaction():
@@ -78,7 +89,9 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            compare_type=True,
+            # SQLite representa Boolean como INTEGER; la comparación de tipos
+        # produciría un falso positivo para `widget_preferences.is_visible`.
+        compare_type=False,
         )
 
         with context.begin_transaction():

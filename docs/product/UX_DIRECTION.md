@@ -88,11 +88,11 @@ La interfaz debe permitir actuar sobre el objeto en su contexto. No se busca eli
 
 ## 12. Alcance de personalización del dashboard
 
-La primera entrega utiliza las zonas de layout que ya existen en Home y el campo position que ya persiste la API. Un widget puede cambiar de orden dentro de su zona, pero no cruzar de zona. El catálogo conserva IDs estables y la visibilidad de cada widget permanece independiente.
+La entrega inicial de personalización de Home utilizó las zonas funcionales existentes. UX-WIDGETS-003 la amplía con autorización del Product Owner: un grid CSS único reemplaza esas zonas fijas y permite orden global y spans persistidos, sin coordenadas en píxeles. El catálogo conserva IDs estables y la visibilidad de cada widget permanece independiente.
 
-La Captura rápida se presenta visualmente como un grupo para mantener juntas las acciones de tarea y nota; sus dos preferencias de visibilidad siguen siendo independientes. El grupo se mueve como una sola unidad cuando al menos una de sus acciones está visible.
+La Captura rápida se presenta visualmente como un grupo para mantener juntas las acciones de tarea y nota; sus dos preferencias de visibilidad siguen siendo independientes. El grupo se mueve y redimensiona como una sola unidad cuando al menos una de sus acciones está visible.
 
-El movimiento entre zonas queda fuera de esta entrega. Antes de habilitarlo se debe decidir el modelo de layout, persistir la zona de forma explícita y actualizar DATABASE.md, el contrato de API, exportación y pruebas mediante una tarea y aprobación separadas. config_json no es un sustituto de ese diseño.
+El orden y los spans se guardan en la fuente de preferencias existente, con validación en backend, migración y exportación versionada. El grid auto-colocado evita solapamientos; los spans guardados se adaptan al viewport y no recortan contenido. `config_json` no se usa como sustituto del contrato de layout.
 
 ## 13. Patrones compartidos
 

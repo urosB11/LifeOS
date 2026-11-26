@@ -8,10 +8,16 @@ export function escapeHtml(text) {
 }
 
 /** Fetch JSON con errores normalizados (lanza Error con .status). */
-export async function apiJson(url, { method = "GET", body = null } = {}) {
-  const init = { method };
+export async function apiJson(
+  url,
+  { method = "GET", body = null, headers = {} } = {}
+) {
+  const init = { method, headers: { ...headers } };
   if (body !== null) {
-    init.headers = { "Content-Type": "application/json" };
+    const hasContentType = Object.keys(init.headers).some(
+      (name) => name.toLowerCase() === "content-type"
+    );
+    if (!hasContentType) init.headers["Content-Type"] = "application/json";
     init.body = JSON.stringify(body);
   }
   const res = await fetch(url, init);

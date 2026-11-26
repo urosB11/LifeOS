@@ -83,24 +83,31 @@ export async function renderProjectsView(container, apiBase) {
         <h1>Proyectos</h1>
         <p class="subtitle">Gesti&oacute;n de tus proyectos activos</p>
       </div>
+      <button class="btn btn--primary" id="proj-new-btn" aria-expanded="false" aria-controls="proj-create-panel">
+        + Nuevo proyecto
+      </button>
     </div>
 
-    <div class="card" style="margin-bottom: 24px;">
-      <h3 style="margin-top:0;">Nuevo proyecto</h3>
-      <div class="form-row" style="margin-top:12px;">
-        <div class="form-group" style="flex:2; min-width:260px;">
-          <label for="proj-name">Nombre</label>
-          <input type="text" id="proj-name" placeholder="Nombre del proyecto" required>
+    <section class="task-panel" id="proj-create-panel" aria-labelledby="proj-create-title" hidden>
+      <form id="proj-create-form" novalidate>
+        <h2 class="task-panel__title" id="proj-create-title">Nuevo proyecto</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="proj-name">Nombre <span class="text-secondary">(obligatorio)</span></label>
+            <input type="text" id="proj-name" placeholder="Nombre del proyecto" maxlength="200" required>
+          </div>
+          <div class="form-group">
+            <label for="proj-desc">Descripci&oacute;n (opcional)</label>
+            <input type="text" id="proj-desc" placeholder="Descripci&oacute;n" maxlength="2000">
+          </div>
         </div>
-        <div class="form-group" style="flex:1; min-width:200px;">
-          <label for="proj-desc">Descripci&oacute;n (opcional)</label>
-          <input type="text" id="proj-desc" placeholder="Descripci&oacute;n">
+        <div class="btn-group">
+          <button type="submit" class="btn btn--primary" id="proj-create-btn">Crear proyecto</button>
+          <button type="button" class="btn btn--secondary" id="proj-cancel-btn">Cancelar</button>
+          <span class="task-panel__error" id="proj-create-error" role="alert" tabindex="-1"></span>
         </div>
-        <div class="form-group" style="flex:0; min-width:auto; align-self:flex-end;">
-          <button class="btn btn--primary" id="proj-create-btn">Crear proyecto</button>
-        </div>
-      </div>
-    </div>
+      </form>
+    </section>
 
     <div id="projects-list" class="empty-state">
       <div class="empty-state__icon" aria-hidden="true">&#128194;</div>
@@ -109,11 +116,17 @@ export async function renderProjectsView(container, apiBase) {
   `;
 
   const listEl = container.querySelector("#projects-list");
+  const createPanel = container.querySelector("#proj-create-panel");
+  const createForm = container.querySelector("#proj-create-form");
   const nameInput = container.querySelector("#proj-name");
   const descInput = container.querySelector("#proj-desc");
   const createBtn = container.querySelector("#proj-create-btn");
+  const cancelBtn = container.querySelector("#proj-cancel-btn");
+  const errorEl = container.querySelector("#proj-create-error");
+  const newBtn = container.querySelector("#proj-new-btn");
 
   let currentProjects = [];
+  let createPending = false;
 
   async function load() {
     listEl.innerHTML = `
@@ -130,7 +143,7 @@ export async function renderProjectsView(container, apiBase) {
         listEl.innerHTML = `
           <div class="empty-state__icon" aria-hidden="true">&#128194;</div>
           <p class="empty-state__title">A&uacute;n no hay proyectos</p>
-          <p class="empty-state__text">Crea el primero con el formulario de arriba.</p>
+          <p class="empty-state__text">Usa + Nuevo proyecto para crear el primero.</p>
         `;
         return;
       }
@@ -209,18 +222,72 @@ export async function renderProjectsView(container, apiBase) {
     }
   }
 
-  createBtn.addEventListener("click", async () => {
+  function setCreatePending(pending) {
+    createPending = pending;
+    nameInput.disabled = pending;
+    descInput.disabled = pending;
+    createBtn.disabled = pending;
+    cancelBtn.disabled = pending;
+    newBtn.disabled = pending;
+    createBtn.textContent = pending ? "Creando…" : "Crear proyecto";
+  }
+
+  function closeCreatePanel() {
+    if (createPending) return;
+    createPanel.hidden = true;
+    newBtn.setAttribute("aria-expanded", "false");
+    newBtn.textContent = "+ Nuevo proyecto";
+    nameInput.value = "";
+    descInput.value = "";
+    errorEl.textContent = "";
+    nameInput.removeAttribute("aria-invalid");
+    newBtn.focus();
+  }
+
+  function openCreatePanel() {
+    nameInput.value = "";
+    descInput.value = "";
+    errorEl.textContent = "";
+    nameInput.removeAttribute("aria-invalid");
+    createPanel.hidden = false;
+    newBtn.setAttribute("aria-expanded", "true");
+    newBtn.textContent = "Cerrar";
+    nameInput.focus();
+  }
+
+  newBtn.addEventListener("click", () => {
+    if (createPanel.hidden) openCreatePanel();
+    else closeCreatePanel();
+  });
+  cancelBtn.addEventListener("click", closeCreatePanel);
+  createPanel.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !createPanel.hidden && !createPending) {
+      event.stopPropagation();
+      closeCreatePanel();
+    }
+  });
+  createForm.addEventListener("input", () => {
+    errorEl.textContent = "";
+    nameInput.removeAttribute("aria-invalid");
+  });
+
+  createForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (createPending) return;
     const name = nameInput.value.trim();
     if (!name) {
-      showToast("El nombre del proyecto no puede estar vacío", "warning");
+      errorEl.textContent = "El nombre del proyecto no puede estar vacío.";
+      nameInput.setAttribute("aria-invalid", "true");
       nameInput.focus();
       return;
     }
     const body = { name };
     if (descInput.value.trim()) body.description = descInput.value.trim();
 
-    createBtn.disabled = true;
-    createBtn.textContent = "Creando…";
+    setCreatePending(true);
+    errorEl.textContent = "";
+    nameInput.removeAttribute("aria-invalid");
+    let created = false;
     try {
       const res = await fetch(`${apiBase}/projects`, {
         method: "POST",
@@ -229,19 +296,25 @@ export async function renderProjectsView(container, apiBase) {
       });
 
       if (res.ok) {
+        created = true;
+        createPanel.hidden = true;
+        newBtn.setAttribute("aria-expanded", "false");
+        newBtn.textContent = "+ Nuevo proyecto";
         nameInput.value = "";
         descInput.value = "";
         showToast("Proyecto creado", "success");
         await load();
       } else {
-        const err = await res.json();
-        showToast(err.detail || "Error al crear proyecto", "error");
+        const err = await res.json().catch(() => ({}));
+        errorEl.textContent = formatApiDetail(err.detail, "No se pudo crear el proyecto.");
+        errorEl.focus();
       }
     } catch (error) {
-      showToast("Error de conexión", "error");
+      errorEl.textContent = "Error de conexión. Inténtalo de nuevo.";
+      errorEl.focus();
     } finally {
-      createBtn.disabled = false;
-      createBtn.textContent = "Crear proyecto";
+      setCreatePending(false);
+      if (created) newBtn.focus();
     }
   });
 

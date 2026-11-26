@@ -83,12 +83,31 @@ class NoteService:
         note = self.note_repo.get(note_id)
         if note is None:
             return False
+
+        # El historial de los Canvases afectados deja de ser reversible antes
+        # de eliminar la Note canónica; así undo/redo no puede resucitarla.
+        # Se incluyen Canvases citados solo por snapshots históricos: una Card
+        # quitada todavía podría ser restaurada por undo.
+        from sqlalchemy import delete
+
+        from app.modules.mind.models import MindCanvasHistory
+        from app.modules.mind.service import canvas_ids_referencing_note
+
+        canvas_ids = canvas_ids_referencing_note(self.db, note_id)
+        if canvas_ids:
+            self.db.execute(
+                delete(MindCanvasHistory).where(
+                    MindCanvasHistory.canvas_id.in_(canvas_ids)
+                )
+            )
+
         self.note_repo.delete(note)
         record_event(
             self.db,
             event_type="note.deleted",
             entity_type="note",
             entity_id=note_id,
+            metadata={"affected_canvases": len(set(canvas_ids))},
         )
         return True
 

@@ -10,10 +10,9 @@ from app.db.base import Base
 
 
 class WidgetPreference(Base):
-    """Preferencia de visibilidad y orden de un widget del dashboard.
+    """Preferencia de visibilidad, orden y tamaño de un widget del dashboard.
 
-    IDs del catálogo MVP: upcoming_tasks, active_projects, quick_add_task,
-    quick_add_note. El orden inicial sigue ese orden.
+    Los tamaños son spans lógicos de grid, no coordenadas en píxeles.
     """
 
     __tablename__ = "widget_preferences"
@@ -21,6 +20,8 @@ class WidgetPreference(Base):
     widget_id: Mapped[str] = mapped_column(String(50), primary_key=True)
     is_visible: Mapped[bool] = mapped_column(Boolean, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    column_span: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    row_span: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     config_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[str] = mapped_column(
         String(32), nullable=False, default=utc_now, onupdate=utc_now

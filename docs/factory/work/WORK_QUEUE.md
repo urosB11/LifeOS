@@ -38,20 +38,20 @@ Prioridad P1 · Developer Nemo (ejecución reasignada por el PO a Mimo) · Secue
 La etapa aplica la dirección de VISION.md y docs/product/UX_DIRECTION.md: interfaz útil y contextual, no CRUD administrativo ni dashboard decorativo. Mantiene el stack y la fuente de verdad actuales.
 
 ### RESPONSIVE-002 — Corregir overflow horizontal móvil
-Prioridad P0 · Developer Mimo · Estado: READY · Spec: RESPONSIVE-002/SPEC.md · Sin dependencia.  
-Reproducir y corregir el desbordamiento horizontal identificado en STAB-001 en Projects, Habits y Notes. No ocultarlo con overflow-x:hidden ni recortar contenido. Verificar todas las rutas principales y navegación en 1440×900, 768×1024 y 390×844. Mantener el token global --text-muted fuera de alcance hasta decisión del PO.
+Prioridad P0 · Developer Mimo · **Estado: REVIEW** (2026-11-22) · Spec: RESPONSIVE-002/SPEC.md · Sin dependencia.
+Se confirmó que `.main` podía crecer a su ancho intrínseco dentro de `.app-content`; al fijar `width: 100%` y `min-width: 0`, Projects, detalle, Habits y Notes dejaron de ampliar la página. QA detectó además que el filtro de proyecto de Tareas heredaba el ancho de una opción larga; los `select` de `.filters-bar` ahora quedan limitados a su contenedor. Sin `overflow-x:hidden` ni recorte de contenido. Verificación browser en 1440×900, 768×1024 y 390×844, siete rutas y ambos temas: sin overflow de página; las tablas conservan scroll interno en `.table-wrap`. pytest 140/140, Ruff, node --check, smoke HTTP/API y `git diff --check` OK. Handoff: RESPONSIVE-002/HANDOFF.md. Pendiente revisión/aceptación del PO.
 
 ### UX-HOME-002 — Claridad de Home y captura contextual
-Prioridad P1 · Developer Mimo · Estado: READY · Depende de RESPONSIVE-002 · Spec: UX-HOME-002/SPEC.md.  
-Hacer disjuntas las secciones Atención y Hoy; distinguir error de carga de cero resultados; mostrar “Sin tareas” cuando un proyecto no tiene tareas; convertir Captura rápida en una única superficie con modos Tarea/Nota y permitir contenido de nota. Mantener IDs y preferencias de widgets, datos reales, zona horaria configurada y stack actual.
+Prioridad P1 · Developer Mimo · **Estado: REVIEW** (2026-11-22) · Depende de RESPONSIVE-002 · Spec: UX-HOME-002/SPEC.md.
+Atención y Hoy son disjuntas por ID, conservan límites y contadores; los errores no se anuncian como listas vacías; proyectos sin tareas muestran “Sin tareas”; Captura rápida tiene modos Tarea/Nota, un solo formulario visible, borradores separados y contenido de nota. La zona horaria configurada gobierna Home y el reloj local del backend ahora lee correctamente la preferencia guardada. Sin cambios de API, modelo, migración ni dependencias. QA: 141 pytest, Ruff, node --check, smoke HTTP/API y matriz visual Home 1440×900, 768×1024, 390×844 en ambos temas sin overflow. Handoff: UX-HOME-002/HANDOFF.md. Pendiente revisión/aceptación del PO.
 
 ### UX-WIDGETS-002 — Personalización visual de widgets
-Prioridad P1 · Developer Mimo · Estado: READY · Depende de UX-HOME-002 · Spec: UX-WIDGETS-002/SPEC.md.  
-Reemplazar los editores duplicados (modal de flechas en Home + posiciones numéricas en Settings) por un modo Personalizar en Home con arrastre desde asas, Guardar/Cancelar y alternativa accesible mover arriba/abajo. Reordenar solo dentro de las zonas funcionales existentes. Reutilizar GET/PUT /dashboard/widgets y position; sin migración ni zona nueva.
+Prioridad P1 · Developer Mimo · **Estado: REVIEW** (2026-11-22) · Depende de UX-HOME-002 · Spec: UX-WIDGETS-002/SPEC.md.
+Home ahora ofrece personalización explícita con arrastre por asa, controles accesibles mover arriba/abajo, visibilidad independiente y guardar/cancelar; Settings ya no duplica el editor. Solo se reordenan widgets dentro de sus zonas actuales y Captura rápida se mueve como grupo. Sin cambios de API, modelo, migración ni dependencias. QA propia: 141 pytest, Ruff, node --check, persistencia/error/reintento, teclado y matriz visual en 1440×900, 768×1024 y 390×844 en ambos temas sin overflow. Handoff: UX-WIDGETS-002/HANDOFF.md. Pendiente revisión independiente y aceptación del PO.
 
 ### UX-MODULES-002 — Formularios progresivos y edición de notas
-Prioridad P1 · Developer Mimo · Estado: READY · Depende de UX-WIDGETS-002 · Spec: UX-MODULES-002/SPEC.md.  
-Colapsar por defecto los formularios permanentes de creación de Projects y Notes; conservar listas visibles; hacer progresivo el alta de etiquetas; habilitar edición de título y contenido de notas con PATCH actual. No rehacer Tasks, que ya tiene panel compacto, ni ocultar acciones frecuentes de Hábitos.
+Prioridad P1 · Developer Mimo · **Estado: REVIEW** (2026-11-22) · Depende de UX-WIDGETS-002 · Spec: UX-MODULES-002/SPEC.md.
+Projects y Notes abren los formularios de alta bajo demanda sin ocultar sus listas; el alta de etiquetas también es progresiva. Notes permite editar título y contenido con PATCH, conserva borradores ante error y deja intactas las relaciones no editadas. Los datos se mantienen como texto seguro. Sin cambios de API, modelo, migraciones ni dependencias. QA propia: pytest (141), Ruff, node --check, smoke API y flujos interactivos; matriz visual en 1440×900, 768×1024 y 390×844, ambos temas, sin overflow horizontal. Handoff: UX-MODULES-002/HANDOFF.md. Pendiente revisión independiente y aceptación del PO.
 
 ### UX-REVIEW-002 — Revisión UX independiente
 Prioridad P1 · Reviewer distinto del Developer (Copilot UX preferente) · Estado: PLANNING · Spec: UX-REVIEW-002/SPEC.md.  
@@ -61,6 +61,12 @@ Se habilita cuando las cuatro entregas anteriores estén en REVIEW. Solo lectura
 
 **Decisiones expresamente fuera de alcance:** mover widgets entre main/side/full; migrar o extender widget_preferences; cambiar config_json; cambiar el token global --text-muted; cambiar el comportamiento del tema “Sistema”; añadir librerías/frameworks/endpoints; reconstruir Home o el shell completo.
 
+
+## Fase 9.2 — Distribución flexible de widgets
+
+### UX-WIDGETS-003 — Grid redimensionable de Home
+Prioridad P1 · Developer Mimo · **Estado: REVIEW** (2026-11-22; QA propia, pendiente revisión independiente y aceptación del PO) · Depende de UX-WIDGETS-002 · Spec: UX-WIDGETS-003/SPEC.md · ADR-003.
+Home reemplaza las zonas fijas por un grid responsive con orden y spans persistidos. Incluye drag, resize, alternativas de teclado, migración de `widget_preferences` y actualización de exportación. Projects y Notes no se modifican. Sin dependencias nuevas. En la revisión manual se encontró la base activa en `0005_habits`: faltaban las columnas de spans, `GET /dashboard/widgets` respondía 500 y la protección frontend mostraba el aviso y bloqueaba Personalizar; Reintentar repetía el mismo GET. Se respaldó y actualizó la base a `0006_home_widget_grid` sin filas de preferencias ni cambios a otros datos; GET devuelve ahora seis defaults. QA propia: pytest, Ruff en archivos backend afectados, `node --check`, migración temporal desde 0005 vacía y con preferencias, reintento tras fallo, Personalizar, Guardar/Cancelar/recarga y matriz clara/oscura. La validación en dispositivo táctil físico y revisión independiente quedan pendientes. Handoff: UX-WIDGETS-003/HANDOFF.md. QA adicional (2026-11-22, mismo agente de la implementación, no es revisión independiente): informe en UX-WIDGETS-003/QA.md — se corrigió un defecto ALTA del arrastre (la sección se soltaba al final de la cuadrícula en lugar de donde se señalaba) y se retiró el `aria-live` de `#home-context`; queda pendiente la confirmación del PO sobre `row_span` 1 frente al 2 del boceto del SPEC. No aceptar como DONE hasta revisión independiente y PO.
 
 ## Revisión
 ### UX-REVIEW-001

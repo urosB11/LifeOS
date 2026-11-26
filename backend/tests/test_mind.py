@@ -4,18 +4,22 @@ Criterios de aceptación cubiertos: SPEC MIND-002 §7 (1-11).
 Todas las pruebas usan bases temporales (conftest).
 """
 
+import json
 import sqlite3
 
 import pytest
+from sqlalchemy import delete, func, select, text
+from sqlalchemy.exc import IntegrityError
+
+from app.modules.mind import service as mind_service
 from app.modules.mind.models import (
     MindCanvas,
+    MindCanvasHistory,
     MindCanvasNode,
     MindSpace,
     MindSpaceNote,
 )
 from app.modules.notes.models import Note
-from sqlalchemy import delete, select, text
-from sqlalchemy.exc import IntegrityError
 
 # --- Utilidades ------------------------------------------------------------
 
@@ -668,3 +672,472 @@ def test_restore_roundtrip_preserves_mind_data(client):
             db.execute(delete(Note).where(Note.id == note_id))
             db.commit()
         engine.dispose()
+
+
+# --- Canvas interactivo: spatially persistence and history -----------------
+
+
+def _canvas_with_cards(client, count=2):
+    space = _create_space(client, name="Canvas interactivo")
+    canvas = _create_canvas(client, space["id"], title="Canvas reversible")
+    cards = [
+        _create_card(client, canvas["id"], content=f"Card {index}", x=index * 100.0)
+        for index in range(count)
+    ]
+    return canvas, cards
+
+
+def test_spatial_action_is_atomic_and_idempotent(client, db):
+    canvas, cards = _canvas_with_cards(client)
+    payload = {
+        "action_type": "move",
+        "nodes": [
+            {"id": cards[0]["id"], "x": 55.0, "y": 66.0},
+            {"id": cards[1]["id"], "x": 155.0, "y": 166.0},
+        ],
+    }
+    headers = {"Idempotency-Key": "spatial-move-1"}
+
+    response = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json=payload,
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["can_undo"] is True
+
+    nodes = client.get(f"/api/v1/mind/canvases/{canvas['id']}/nodes").json()
+    positions = {node["id"]: (node["x"], node["y"]) for node in nodes}
+    assert positions[cards[0]["id"]] == (55.0, 66.0)
+    assert positions[cards[1]["id"]] == (155.0, 166.0)
+
+    replay = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json=payload,
+        headers=headers,
+    )
+    assert replay.status_code == 200, replay.text
+    history_count = db.execute(
+        select(func.count(MindCanvasHistory.id)).where(
+            MindCanvasHistory.canvas_id == canvas["id"]
+        )
+    ).scalar_one()
+    assert history_count == 3  # una creación de Card por Card + una acción grupal
+
+    changed_payload = {
+        **payload,
+        "nodes": [{"id": cards[0]["id"], "x": 999.0, "y": 66.0}],
+    }
+    conflict = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json=changed_payload,
+        headers=headers,
+    )
+    assert conflict.status_code == 409, conflict.text
+
+
+def test_spatial_group_rejects_foreign_node_without_partial_changes(client):
+    canvas, cards = _canvas_with_cards(client)
+    response = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json={
+            "action_type": "move",
+            "nodes": [
+                {"id": cards[0]["id"], "x": 300.0, "y": 400.0},
+                {"id": "missing-node", "x": 500.0, "y": 600.0},
+            ],
+        },
+        headers={"Idempotency-Key": "spatial-invalid"},
+    )
+    assert response.status_code == 404, response.text
+    node = client.get(f"/api/v1/mind/canvases/{canvas['id']}/nodes").json()[0]
+    assert (node["x"], node["y"]) != (300.0, 400.0)
+
+
+def test_undo_and_redo_restore_spatial_state_and_retry_safely(client):
+    canvas, cards = _canvas_with_cards(client, count=1)
+    card = cards[0]
+    moved = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json={
+            "action_type": "move",
+            "nodes": [{"id": card["id"], "x": 321.0, "y": 654.0}],
+        },
+        headers={"Idempotency-Key": "move-for-undo"},
+    )
+    assert moved.status_code == 200, moved.text
+
+    history = client.get(f"/api/v1/mind/canvases/{canvas['id']}/history").json()
+    action_id = history["undo_action_id"]
+    undo_headers = {"Idempotency-Key": "undo-1"}
+    undo = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/history/undo",
+        json={"expected_action_id": action_id},
+        headers=undo_headers,
+    )
+    assert undo.status_code == 200, undo.text
+    assert undo.json()["can_redo"] is True
+    node = client.get(f"/api/v1/mind/canvases/{canvas['id']}/nodes").json()[0]
+    assert (node["x"], node["y"]) == (card["x"], card["y"])
+
+    retry = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/history/undo",
+        json={"expected_action_id": action_id},
+        headers=undo_headers,
+    )
+    assert retry.status_code == 200, retry.text
+    node = client.get(f"/api/v1/mind/canvases/{canvas['id']}/nodes").json()[0]
+    assert (node["x"], node["y"]) == (card["x"], card["y"])
+
+    redo = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/history/redo",
+        json={"expected_action_id": action_id},
+        headers={"Idempotency-Key": "redo-1"},
+    )
+    assert redo.status_code == 200, redo.text
+    node = client.get(f"/api/v1/mind/canvases/{canvas['id']}/nodes").json()[0]
+    assert (node["x"], node["y"]) == (321.0, 654.0)
+
+
+def test_stale_expected_action_is_rejected_without_changing_state(client):
+    canvas, cards = _canvas_with_cards(client, count=1)
+    card = cards[0]
+    first = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json={
+            "action_type": "move",
+            "nodes": [{"id": card["id"], "x": 100.0, "y": 100.0}],
+        },
+        headers={"Idempotency-Key": "stale-first"},
+    )
+    assert first.status_code == 200, first.text
+    second = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json={
+            "action_type": "move",
+            "nodes": [{"id": card["id"], "x": 200.0, "y": 200.0}],
+        },
+        headers={"Idempotency-Key": "stale-second"},
+    )
+    assert second.status_code == 200, second.text
+
+    stale = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/history/undo",
+        json={"expected_action_id": first.json()["undo_action_id"]},
+        headers={"Idempotency-Key": "stale-undo"},
+    )
+    assert stale.status_code == 409, stale.text
+    node = client.get(f"/api/v1/mind/canvases/{canvas['id']}/nodes").json()[0]
+    assert (node["x"], node["y"]) == (200.0, 200.0)
+
+
+def test_invalid_snapshot_returns_conflict_without_partial_changes(client, db):
+    canvas, cards = _canvas_with_cards(client, count=2)
+    edge = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/edges",
+        json={
+            "source_node_id": cards[0]["id"],
+            "target_node_id": cards[1]["id"],
+        },
+        headers={"Idempotency-Key": "invalid-snapshot-edge"},
+    )
+    assert edge.status_code == 201, edge.text
+    action_id = client.get(
+        f"/api/v1/mind/canvases/{canvas['id']}/history"
+    ).json()["undo_action_id"]
+    row = db.execute(
+        select(MindCanvasHistory).where(MindCanvasHistory.id == action_id)
+    ).scalar_one()
+    envelope = json.loads(row.snapshot_json)
+    source_id, target_id = sorted(card["id"] for card in cards)
+    envelope["state"]["edges"] = [
+        {
+            "id": "invalid-anchor-edge",
+            "canvas_id": canvas["id"],
+            "source_node_id": source_id,
+            "target_node_id": target_id,
+            "source_anchor": 99,
+            "target_anchor": 0,
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+    ]
+    row.snapshot_json = json.dumps(envelope)
+    db.flush()
+
+    undo = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/history/undo",
+        json={"expected_action_id": action_id},
+        headers={"Idempotency-Key": "invalid-snapshot-undo"},
+    )
+    assert undo.status_code == 409, undo.text
+    assert len(client.get(f"/api/v1/mind/canvases/{canvas['id']}/edges").json()) == 1
+
+
+def test_pruned_history_keeps_idempotency_receipt(client, db, monkeypatch):
+    monkeypatch.setattr(mind_service, "HISTORY_LIMIT", 2)
+    space = _create_space(client, name="Space idempotente")
+    canvas = _create_canvas(client, space["id"], title="Canvas idempotente")
+    card_payload = {"content": "Card idempotente", "x": 1.0, "y": 2.0}
+    created = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/cards",
+        json=card_payload,
+        headers={"Idempotency-Key": "card-receipt"},
+    )
+    assert created.status_code == 201, created.text
+    card = created.json()
+
+    for index in range(2):
+        moved = client.post(
+            f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+            json={
+                "action_type": "move",
+                "nodes": [
+                    {"id": card["id"], "x": 10.0 + index, "y": 20.0 + index}
+                ],
+            },
+            headers={"Idempotency-Key": f"move-receipt-{index}"},
+        )
+        assert moved.status_code == 200, moved.text
+
+    replay = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/cards",
+        json=card_payload,
+        headers={"Idempotency-Key": "card-receipt"},
+    )
+    assert replay.status_code == 201, replay.text
+    assert replay.json()["id"] == card["id"]
+    assert len(client.get(f"/api/v1/mind/canvases/{canvas['id']}/nodes").json()) == 1
+
+    rows = db.execute(
+        select(MindCanvasHistory).where(
+            MindCanvasHistory.canvas_id == canvas["id"]
+        )
+    ).scalars().all()
+    active_rows = [
+        row
+        for row in rows
+        if row.action_type != mind_service.HISTORY_RECEIPT_ACTION
+    ]
+    assert len(active_rows) <= 2
+    assert any(
+        row.action_type == mind_service.HISTORY_RECEIPT_ACTION for row in rows
+    )
+
+
+def test_new_action_after_undo_discards_redo_branch(client):
+    canvas, cards = _canvas_with_cards(client, count=1)
+    card = cards[0]
+    first = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json={
+            "action_type": "move",
+            "nodes": [{"id": card["id"], "x": 100.0, "y": 100.0}],
+        },
+        headers={"Idempotency-Key": "move-first"},
+    )
+    action_id = first.json()["undo_action_id"]
+    client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/history/undo",
+        json={"expected_action_id": action_id},
+        headers={"Idempotency-Key": "undo-first"},
+    )
+    second = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json={
+            "action_type": "move",
+            "nodes": [{"id": card["id"], "x": 200.0, "y": 200.0}],
+        },
+        headers={"Idempotency-Key": "move-second"},
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["can_redo"] is False
+
+
+def test_edges_are_non_directed_unique_and_reversible(client):
+    canvas, cards = _canvas_with_cards(client)
+    source = cards[0]["id"]
+    target = cards[1]["id"]
+    created = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/edges",
+        json={"source_node_id": source, "target_node_id": target},
+        headers={"Idempotency-Key": "edge-create"},
+    )
+    assert created.status_code == 201, created.text
+
+    duplicate = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/edges",
+        json={"source_node_id": target, "target_node_id": source},
+        headers={"Idempotency-Key": "edge-duplicate"},
+    )
+    assert duplicate.status_code == 409, duplicate.text
+
+    history = client.get(f"/api/v1/mind/canvases/{canvas['id']}/history").json()
+    undo = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/history/undo",
+        json={"expected_action_id": history["undo_action_id"]},
+        headers={"Idempotency-Key": "edge-undo"},
+    )
+    assert undo.status_code == 200, undo.text
+    assert client.get(f"/api/v1/mind/canvases/{canvas['id']}/edges").json() == []
+
+
+def test_reorder_normalizes_all_z_indexes(client):
+    canvas, cards = _canvas_with_cards(client, count=3)
+    response = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json={
+            "action_type": "reorder",
+            "nodes": [{"id": cards[0]["id"], "z_index": 2}],
+        },
+        headers={"Idempotency-Key": "reorder-front"},
+    )
+    assert response.status_code == 200, response.text
+    nodes = client.get(f"/api/v1/mind/canvases/{canvas['id']}/nodes").json()
+    assert sorted(node["z_index"] for node in nodes) == [0, 1, 2]
+
+
+def test_reorder_uses_created_at_and_id_as_stable_tie_breakers(client, db):
+    canvas, cards = _canvas_with_cards(client, count=3)
+    db.execute(
+        MindCanvasNode.__table__.update()
+        .where(MindCanvasNode.canvas_id == canvas["id"])
+        .values(created_at="2026-01-01T00:00:00Z")
+    )
+    db.flush()
+    desired = [
+        card["id"]
+        for card in sorted(cards, key=lambda item: item["id"], reverse=True)
+    ]
+
+    response = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json={
+            "action_type": "reorder",
+            "nodes": [
+                {"id": node_id, "z_index": index}
+                for index, node_id in enumerate(desired)
+            ],
+        },
+        headers={"Idempotency-Key": "reorder-complete"},
+    )
+    assert response.status_code == 200, response.text
+    nodes = client.get(f"/api/v1/mind/canvases/{canvas['id']}/nodes").json()
+    assert [node["id"] for node in nodes] == desired
+    assert [node["z_index"] for node in nodes] == [0, 1, 2]
+
+
+def test_spatial_action_accepts_more_than_one_hundred_cards(client, db):
+    space = _create_space(client, name="Space amplio")
+    canvas = _create_canvas(client, space["id"], title="Canvas amplio")
+    notes = [
+        Note(
+            id=f"wide-note-{index:03d}",
+            title=f"Nota {index}",
+            content="Contenido",
+            created_at="2026-01-01T00:00:00Z",
+            updated_at="2026-01-01T00:00:00Z",
+        )
+        for index in range(101)
+    ]
+    nodes = [
+        MindCanvasNode(
+            id=f"wide-node-{index:03d}",
+            canvas_id=canvas["id"],
+            note_id=note.id,
+            x=float(index),
+            y=0.0,
+            z_index=index,
+            created_at="2026-01-01T00:00:00Z",
+            updated_at="2026-01-01T00:00:00Z",
+        )
+        for index, note in enumerate(notes)
+    ]
+    db.add_all([*notes, *nodes])
+    db.flush()
+
+    response = client.post(
+        f"/api/v1/mind/canvases/{canvas['id']}/spatial-actions",
+        json={
+            "action_type": "move",
+            "nodes": [
+                {"id": node.id, "x": float(index + 1), "y": 10.0}
+                for index, node in enumerate(nodes)
+            ],
+        },
+        headers={"Idempotency-Key": "move-over-one-hundred"},
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_node_update_can_restore_default_dimensions(client):
+    canvas, cards = _canvas_with_cards(client, count=1)
+    response = client.patch(
+        f"/api/v1/mind/canvases/{canvas['id']}/nodes/{cards[0]['id']}",
+        json={"width": None, "height": None},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["width"] is None
+    assert response.json()["height"] is None
+
+
+def test_deleting_note_clears_affected_canvas_history(client):
+    canvas, cards = _canvas_with_cards(client, count=1)
+    impact = client.get(
+        f"/api/v1/mind/notes/{cards[0]['note_id']}/delete-impact"
+    )
+    assert impact.status_code == 200, impact.text
+    assert impact.json()["cleared_history_actions"] >= 1
+
+    deleted = client.delete(f"/api/v1/notes/{cards[0]['note_id']}")
+    assert deleted.status_code == 204, deleted.text
+    history = client.get(f"/api/v1/mind/canvases/{canvas['id']}/history").json()
+    assert history["can_undo"] is False
+    assert history["can_redo"] is False
+
+
+def test_deleting_note_clears_history_that_could_restore_removed_card(client):
+    canvas, cards = _canvas_with_cards(client, count=1)
+    removed = client.delete(
+        f"/api/v1/mind/canvases/{canvas['id']}/nodes/{cards[0]['id']}"
+    )
+    assert removed.status_code == 204, removed.text
+
+    impact = client.get(
+        f"/api/v1/mind/notes/{cards[0]['note_id']}/delete-impact"
+    )
+    assert impact.status_code == 200, impact.text
+    assert impact.json()["affected_canvases"] == 1
+    assert impact.json()["cleared_history_actions"] >= 1
+
+    deleted = client.delete(f"/api/v1/notes/{cards[0]['note_id']}")
+    assert deleted.status_code == 204, deleted.text
+    history = client.get(f"/api/v1/mind/canvases/{canvas['id']}/history").json()
+    assert history["can_undo"] is False
+    assert history["can_redo"] is False
+
+
+def test_database_rejects_edge_with_node_from_another_canvas(client, db):
+    first_canvas, first_cards = _canvas_with_cards(client, count=1)
+    second_canvas, second_cards = _canvas_with_cards(client, count=1)
+    source = first_cards[0]["id"]
+    target = second_cards[0]["id"]
+    if source > target:
+        source, target = target, source
+
+    with pytest.raises(IntegrityError):
+        with db.begin_nested():
+            db.execute(
+                text(
+                    "INSERT INTO mind_canvas_edges "
+                    "(id, canvas_id, source_node_id, target_node_id, "
+                    "source_anchor, target_anchor, created_at, updated_at) "
+                    "VALUES ('cross-edge', :canvas_id, :source, :target, 0, 0, "
+                    "'2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')"
+                ),
+                {
+                    "canvas_id": first_canvas["id"],
+                    "source": source,
+                    "target": target,
+                },
+            )

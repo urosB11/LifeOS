@@ -186,7 +186,11 @@ class MindNodeRepository:
             select(MindCanvasNode)
             .where(MindCanvasNode.canvas_id == canvas_id)
             .options(selectinload(MindCanvasNode.note))
-            .order_by(MindCanvasNode.z_index, MindCanvasNode.created_at)
+            .order_by(
+                MindCanvasNode.z_index,
+                MindCanvasNode.created_at,
+                MindCanvasNode.id,
+            )
         )
         return list(self.db.execute(stmt).scalars().all())
 

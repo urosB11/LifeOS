@@ -53,10 +53,7 @@ Home presenta una síntesis útil del día: atención urgente, acciones restante
 
 ## 5. Personalización de widgets
 
-La primera entrega se limita a las zonas existentes de Home:
-- main: tareas y proyectos;
-- side: hábitos de hoy y grupo Captura rápida;
-- full: semana de hábitos.
+UX-WIDGETS-003 amplía con autorización del PO la primera entrega, reemplazando las zonas fijas de Home por un grid responsive global. El orden guardado determina la colocación auto-flow; cada tarjeta tiene spans de columna/fila limitados y el contenido puede ampliar la altura si lo necesita.
 
 El usuario activa Personalizar desde Home. En ese modo aparecen asas de arrastre y herramientas de visibilidad; en modo normal no se muestran controles permanentes.
 
@@ -66,9 +63,13 @@ El usuario activa Personalizar desde Home. En ese modo aparecen asas de arrastre
 - Un error conserva el borrador y permite reintentar.
 - Ofrecer mover arriba/abajo como alternativa de teclado y táctil.
 - Conservar foco y anunciar nombre/posición después de mover.
+- Redimensionar con un asa dedicada y una alternativa de teclado; anunciar el tamaño lógico resultante.
+- Mostrar el destino de arrastre y el tamaño provisional sin permitir solapamientos.
+- Ajustar los spans al ancho disponible en tablet y móvil sin sobrescribir las preferencias guardadas.
 - Respetar prefers-reduced-motion.
 - Captura rápida se mueve como grupo visual, pero quick_add_task y quick_add_note conservan visibilidad independiente.
-- No mover widgets entre zonas en esta entrega: el modelo persiste position, pero no una zona. La extensión requiere una decisión y diseño de datos/API separados.
+- Limitar la captura de puntero/touch a las asas para no interferir con controles internos ni el scroll de la página.
+- Guardar orden y tamaño juntos; Cancelar descarta ambos y un error de guardado conserva el borrador.
 - Settings no ofrece un segundo editor de orden.
 
 ## 6. Formularios progresivos

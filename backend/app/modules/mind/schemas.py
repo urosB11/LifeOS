@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def _clean_title(value: str | None) -> str | None:
@@ -134,6 +136,15 @@ class MindNodeUpdate(BaseModel):
     height: float | None = Field(default=None, gt=0, le=10000)
     z_index: int | None = Field(default=None, ge=0, le=100000)
 
+    @model_validator(mode="after")
+    def reject_explicit_nulls(self) -> "MindNodeUpdate":
+        if any(
+            field in self.model_fields_set and getattr(self, field) is None
+            for field in ("x", "y", "z_index")
+        ):
+            raise ValueError("La posición y el orden visual no pueden ser null")
+        return self
+
 
 class MindNoteBrief(BaseModel):
     """Contenido canónico de la Card (una sola fuente de verdad: `notes`)."""
@@ -168,6 +179,8 @@ class MindEdgeCreate(BaseModel):
 
     source_node_id: str = Field(..., min_length=1, max_length=36)
     target_node_id: str = Field(..., min_length=1, max_length=36)
+    source_anchor: int = Field(default=0, ge=0, le=7)
+    target_anchor: int = Field(default=0, ge=0, le=7)
 
     @field_validator("target_node_id")
     @classmethod
@@ -175,6 +188,58 @@ class MindEdgeCreate(BaseModel):
         if info.data.get("source_node_id") == value:
             raise ValueError("Una Card no puede conectarse a sí misma")
         return value
+
+
+class MindSpatialNodeUpdate(BaseModel):
+    """Cambio espacial de una Card dentro de una acción atómica."""
+
+    id: str = Field(..., min_length=1, max_length=36)
+    x: float | None = Field(default=None, ge=-100000, le=100000)
+    y: float | None = Field(default=None, ge=-100000, le=100000)
+    width: float | None = Field(default=None, gt=0, le=10000)
+    height: float | None = Field(default=None, gt=0, le=10000)
+    z_index: int | None = Field(default=None, ge=0, le=100000)
+
+
+class MindSpatialActionCreate(BaseModel):
+    """Acción espacial atómica para mover, redimensionar o reordenar Cards."""
+
+    action_type: Literal["move", "resize", "reorder"]
+    nodes: list[MindSpatialNodeUpdate] = Field(..., min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_spatial_fields(self) -> "MindSpatialActionCreate":
+        ids = [node.id for node in self.nodes]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Una acción espacial no puede repetir la misma Card")
+
+        for node in self.nodes:
+            if self.action_type == "move":
+                if node.x is None or node.y is None:
+                    raise ValueError("Una acción de movimiento requiere x e y")
+                if (
+                    node.width is not None
+                    or node.height is not None
+                    or node.z_index is not None
+                ):
+                    raise ValueError("Una acción de movimiento solo admite x e y")
+            elif self.action_type == "resize":
+                if node.width is None or node.height is None:
+                    raise ValueError("Una acción de resize requiere width y height")
+                if (
+                    node.x is not None
+                    or node.y is not None
+                    or node.z_index is not None
+                ):
+                    raise ValueError("Una acción de resize solo admite width y height")
+            elif node.z_index is None:
+                raise ValueError("Una acción de orden requiere z_index")
+            elif any(
+                value is not None
+                for value in (node.x, node.y, node.width, node.height)
+            ):
+                raise ValueError("Una acción de orden solo admite z_index")
+        return self
 
 
 class MindEdgeOut(BaseModel):
@@ -217,10 +282,14 @@ class MindInboxOut(BaseModel):
 
 
 class MindHistoryTransition(BaseModel):
-    """Transición de historial (undo/redo) con clave idempotente."""
+    """Transición de historial (undo/redo) con clave idempotente.
 
-    expected_action_id: str | None = Field(default=None, max_length=36)
-    idempotency_key: str = Field(..., min_length=1, max_length=64)
+    La clave puede llegar en el body o en el header ``Idempotency-Key``; la
+    API combina ambos y rechaza la petición si no recibe ninguna.
+    """
+
+    expected_action_id: str = Field(..., min_length=1, max_length=36)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class MindHistoryOut(BaseModel):
@@ -237,10 +306,13 @@ class MindCanvasHistoryOut(BaseModel):
 
     id: str
     canvas_id: str
+    sequence: int
     action_type: str
     snapshot_json: str
     inverse_json: str | None = None
     request_key: str | None = None
+    state: str
+    undone_at: str | None = None
     created_at: str
 
     model_config = {"from_attributes": True}
@@ -261,6 +333,8 @@ __all__ = [
     "MindNodeOut",
     "MindEdgeCreate",
     "MindEdgeOut",
+    "MindSpatialNodeUpdate",
+    "MindSpatialActionCreate",
     "MindCaptureCreate",
     "MindInboxOut",
     "MindHistoryTransition",

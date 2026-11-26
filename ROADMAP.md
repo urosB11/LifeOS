@@ -78,6 +78,10 @@ Las entregas originales STAB-001, BUG-001, HAB-002, PRJ-UI-001, HOME-001, TASK-0
 - No alterar el token global --text-muted sin decisión del PO: el contraste quedó como pendiente en UX-REVIEW-001.
 - Corregir overflow sin ocultarlo mediante overflow-x:hidden ni recortar contenido.
 
+## 6.2 Fase 9.2 — Distribución flexible de widgets de Home
+
+**UX-WIDGETS-003 está READY por autorización expresa del PO.** Esta tarea amplía para Home los límites de UX-WIDGETS-002: permite cambiar el orden global y los spans de widgets en un CSS Grid responsive, con interacción de arrastre/redimensionamiento desde asas, controles accesibles y persistencia backend. Requiere migración aditiva, validación de API y actualización de exportación/documentación de datos. No modifica Projects ni Notes y no agrega dependencias ni endpoints. La especificación y ADR son la autoridad para sus detalles. Al completar QA, dejar REVIEW hasta aceptación del PO.
+
 ## 7. Fase 10 — Planificación (solo diseño)
 
 Definir Área → Objetivo → Proyecto → Hito/entregable → Tarea, fechas planificadas, criterios de aceptación, pesos, relaciones, eventos, migraciones, API, exportación y backup. No crear modelos/migraciones/endpoints hasta aprobación expresa.

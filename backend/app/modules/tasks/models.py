@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.utils import new_uuid, utc_now
@@ -28,6 +28,8 @@ class Task(Base):
     """
 
     __tablename__ = "tasks"
+
+    __table_args__ = (Index("ix_tasks_status", "status"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     project_id: Mapped[str | None] = mapped_column(

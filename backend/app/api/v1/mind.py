@@ -1,6 +1,6 @@
 """Rutas API de Mind (MIND-002/003): Spaces, Inbox, Canvases, Cards y Edges."""
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from app.db.session import get_db
 from app.modules.mind.repository import (
@@ -23,6 +23,7 @@ from app.modules.mind.schemas import (
     MindNodeAttach,
     MindNodeOut,
     MindNodeUpdate,
+    MindSpatialActionCreate,
     MindSpaceCreate,
     MindSpaceOut,
     MindSpaceUpdate,
@@ -67,6 +68,25 @@ def _mind_service(
     # Bootstrap idempotente: toda petición de Mind garantiza el Inbox único.
     service.ensure_inbox()
     return service
+
+
+def _required_idempotency_key(
+    header_key: str | None,
+    body_key: str | None = None,
+) -> str:
+    """Resuelve la clave idempotente sin depender de un único canal HTTP."""
+    if header_key and body_key and header_key != body_key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Las claves idempotentes del header y del body no coinciden",
+        )
+    key = header_key or body_key
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Falta la clave idempotente de la operación",
+        )
+    return key
 
 
 def _build_space_out(space, canvas_count: int) -> MindSpaceOut:
@@ -204,10 +224,20 @@ def list_nodes(canvas_id: str, service: MindService = Depends(_mind_service)):
 def create_card(
     canvas_id: str,
     card_in: MindCardCreate,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=64,
+    ),
     service: MindService = Depends(_mind_service),
 ):
     """Crea una Card de texto: Note canónica + representación visual."""
-    return service.create_card(canvas_id, card_in)
+    return service.create_card(
+        canvas_id,
+        card_in,
+        request_key=idempotency_key,
+    )
 
 
 @router.post(
@@ -218,10 +248,20 @@ def create_card(
 def attach_note(
     canvas_id: str,
     attach_in: MindNodeAttach,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=64,
+    ),
     service: MindService = Depends(_mind_service),
 ):
     """Representa una Note existente sobre el Canvas (sin duplicar contenido)."""
-    return service.attach_note(canvas_id, attach_in)
+    return service.attach_note(
+        canvas_id,
+        attach_in,
+        request_key=idempotency_key,
+    )
 
 
 @router.patch(
@@ -231,10 +271,21 @@ def update_node(
     canvas_id: str,
     node_id: str,
     node_in: MindNodeUpdate,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=64,
+    ),
     service: MindService = Depends(_mind_service),
 ):
     """Guarda posición, tamaño u orden visual tras terminar la interacción."""
-    return service.update_node(canvas_id, node_id, node_in)
+    return service.update_node(
+        canvas_id,
+        node_id,
+        node_in,
+        request_key=idempotency_key,
+    )
 
 
 @router.delete(
@@ -244,10 +295,43 @@ def update_node(
 def remove_node(
     canvas_id: str,
     node_id: str,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=64,
+    ),
     service: MindService = Depends(_mind_service),
 ):
     """Quita la Card del Canvas; la Note canónica no se elimina."""
-    service.remove_node(canvas_id, node_id)
+    service.remove_node(
+        canvas_id,
+        node_id,
+        request_key=idempotency_key,
+    )
+
+
+@router.post(
+    "/canvases/{canvas_id}/spatial-actions",
+    response_model=MindHistoryOut,
+)
+def apply_spatial_action(
+    canvas_id: str,
+    action_in: MindSpatialActionCreate,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=64,
+    ),
+    service: MindService = Depends(_mind_service),
+):
+    """Guarda una acción espacial grupal como una única operación reversible."""
+    return service.apply_spatial_action(
+        canvas_id,
+        action_in,
+        request_key=_required_idempotency_key(idempotency_key),
+    )
 
 
 # --- Edges (conexiones visuales) -----------------------------------------
@@ -269,10 +353,20 @@ def list_edges(canvas_id: str, service: MindService = Depends(_mind_service)):
 def create_edge(
     canvas_id: str,
     edge_in: MindEdgeCreate,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=64,
+    ),
     service: MindService = Depends(_mind_service),
 ):
     """Crea una conexión visual entre dos Cards del mismo Canvas."""
-    return service.create_edge(canvas_id, edge_in)
+    return service.create_edge(
+        canvas_id,
+        edge_in,
+        request_key=idempotency_key,
+    )
 
 
 @router.delete(
@@ -282,10 +376,20 @@ def create_edge(
 def remove_edge(
     canvas_id: str,
     edge_id: str,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=64,
+    ),
     service: MindService = Depends(_mind_service),
 ):
     """Elimina una conexión visual."""
-    service.remove_edge(canvas_id, edge_id)
+    service.remove_edge(
+        canvas_id,
+        edge_id,
+        request_key=idempotency_key,
+    )
 
 
 # --- Inbox ----------------------------------------------------------------
@@ -327,24 +431,38 @@ def get_canvas_history(
     return service.get_history(canvas_id)
 
 
-@router.post('/canvases/{canvas_id}/history/undo', response_model=MindHistoryOut)
+@router.post("/canvases/{canvas_id}/history/undo", response_model=MindHistoryOut)
 def undo_history(
     canvas_id: str,
     payload: MindHistoryTransition,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=64,
+    ),
     service: MindService = Depends(_mind_service),
 ):
-    """Deshace la ultima accion (undo)."""
-    return service.undo(canvas_id, payload.expected_action_id, payload.idempotency_key)
+    """Deshace la última acción aplicada."""
+    key = _required_idempotency_key(idempotency_key, payload.idempotency_key)
+    return service.undo(canvas_id, payload.expected_action_id, key)
 
 
-@router.post('/canvases/{canvas_id}/history/redo', response_model=MindHistoryOut)
+@router.post("/canvases/{canvas_id}/history/redo", response_model=MindHistoryOut)
 def redo_history(
     canvas_id: str,
     payload: MindHistoryTransition,
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=64,
+    ),
     service: MindService = Depends(_mind_service),
 ):
-    """Rehace la ultima accion deshecha (redo)."""
-    return service.redo(canvas_id, payload.expected_action_id, payload.idempotency_key)
+    """Rehace la siguiente acción deshecha."""
+    key = _required_idempotency_key(idempotency_key, payload.idempotency_key)
+    return service.redo(canvas_id, payload.expected_action_id, key)
 
 # --- Delete impact --------------------------------------------------------
 

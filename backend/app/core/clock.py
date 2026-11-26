@@ -32,7 +32,8 @@ def get_timezone(db) -> str:
     y no se sobrescribe la preferencia (el frontend la corregirá).
     """
     repo = UserPreferenceRepository(db)
-    value = repo.get("timezone")
+    preference = repo.get("timezone")
+    value = preference.value if preference else None
     if value and _valid_zone(value) is not None:
         return value
     # El default también debe ser válido; si no, caer a UTC.
