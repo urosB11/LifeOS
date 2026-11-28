@@ -1,8 +1,8 @@
 # Life OS — Diseño de base de datos
 
-**Estado:** línea base de datos del MVP 0.1, Fase 7 (Hábitos), Home widget grid y Mind Canvas reversible
-**Versión:** 0.6
-**Fecha:** 25 de noviembre de 2026
+**Estado:** línea base de datos del MVP 0.1, Fase 7 (Hábitos), Home widget grid, Mind Canvas reversible y reparación 0010
+**Versión:** 0.7
+**Fecha:** 27 de noviembre de 2026
 **Relacionado con:** `VISION.md`, `REQUIREMENTS.md`, `ARCHITECTURE.md`, `SECURITY.md`, `docs/factory/work/MIND-002/SPEC.md`
 
 > Este documento define el modelo lógico del MVP. La implementación SQL concreta se realizará con SQLAlchemy 2.x y migraciones Alembic. Las tablas de dominio son la fuente de verdad; `activity_events` conserva historial complementario, no reemplaza el estado actual.
@@ -448,6 +448,15 @@ La importación JSON acepta las versiones soportadas y realiza un merge no destr
 
 Generar la copia con la API de backup de SQLite (`sqlite3.Connection.backup`) o mecanismo equivalente que garantice una copia consistente, no mediante copia directa del archivo mientras hay escrituras activas. Guardar fuera del repositorio.
 
+`backend/backup_db.py` implementa ese procedimiento con la biblioteca estándar. La copia incluye las transacciones confirmadas del WAL; después verifica `PRAGMA integrity_check`, `PRAGMA foreign_key_check`, los conteos de todas las tablas, `alembic_version` y el SHA-256 del archivo. Rechaza destinos dentro del repositorio, destinos que ya existen (no sobrescribe) y usar la base de origen como destino.
+
+```
+python backend/backup_db.py
+python backend/backup_db.py --source "%LOCALAPPDATA%\LifeOS\lifeos.db" --destination D:\Backups\lifeos-20261127.db
+```
+
+El destino por defecto es `<data-dir>/backups/lifeos-YYYYMMDD-HHMMSS.db`. Los backups contienen datos personales: mantenerlos fuera del repositorio, restringir su acceso y eliminarlos según la política de retención de `SECURITY.md`.
+
 ### 9.3 Restauración
 
 Antes de restaurar, crear una copia adicional de la base actual. Validar que el backup se abre y pasa `PRAGMA integrity_check`; detener el servidor; reemplazar la base mediante procedimiento controlado; iniciar la aplicación y comprobar migraciones e integridad. La restauración debe documentarse y probarse con una base temporal.
@@ -457,6 +466,31 @@ Antes de restaurar, crear una copia adicional de la base actual. Validar que el 
 SQLAlchemy 2.x gestiona modelos y sesiones; Alembic gestiona cambios versionados de esquema. Cada cambio de esquema requiere migración, pruebas sobre base temporal y actualización de este documento. No usar `create_all()` como sustituto de migraciones en entornos con datos existentes.
 
 El grafo integrado tiene dos ramas desde `0005_habits`: `0006_home_widget_grid` para la grilla de Home y `0006_mind` → `0007_mind_canvas_edges` → `0008_mind_canvas_history` para Mind. `0009_merge_evolution_mind` es el único mergepoint y depende de `0006_home_widget_grid` y `0008_mind_canvas_history`. La revisión `0008` reconstruye las tablas legacy de edges/historial hacia el esquema final con FK compuestas, CHECKs, secuencias e índices. `backend/verify_migrations.py` valida upgrade, downgrade/re-upgrade, convergencia desde esquema legacy, `integrity_check`, `foreign_key_check` y `alembic check` exclusivamente sobre bases temporales.
+
+### 10.1 Reparación `0010_repair_mind_canvas_schema`
+
+Algunas bases quedaron selladas en `0008_mind_canvas_history` pero conservan la estructura física de la línea previa al merge: `mind_canvas_history` sin `sequence`/`state`/`undone_at`, `mind_canvas_edges` con columnas legacy (`edge_type`, `style_json`, `ai_suggested`, `ai_confidence`) y `mind_canvas_nodes` sin el índice único `uq_mind_canvas_nodes_canvas_id_id`. El merge reutilizó IDs de revisión y por eso el sello no refleja el esquema real.
+
+`0010` repara únicamente:
+
+- `mind_canvas_history` (columnas finales, CHECK de estado, unicidades e índice);
+- `mind_canvas_edges` (esquema final, FK compuestas, CHECKs, unicidad e índices);
+- el índice único de `mind_canvas_nodes(canvas_id, id)`.
+
+No reconstruye `mind_canvas_nodes` ni elimina `mind_canvas_frame_members`. Antes de ejecutar DDL inspecciona el esquema y valida los datos. Aborta sin modificar tablas si encuentra metadatos legacy de edges con valores no nulos, snapshots o JSON inválidos, `state`/`sequence` inválidos o duplicados, filas huérfanas, extremos fuera del Canvas, self-loops, pares no dirigidos duplicados o un índice de nodos con el nombre correcto pero forma incorrecta. Las filas representables se conservan con sus IDs, timestamps, anclajes y snapshots; los anclajes ausentes se normalizan a `0` y los extremos invertidos se ordenan por ID.
+
+`0010.downgrade()` es un no-op deliberado: `0009` ya espera el esquema final y eliminar columnas destruiría información. El rollback real es un backup SQLite verificado, no `alembic downgrade`.
+
+**Procedimiento para una base sellada en `0008` con esquema físico previo** (probar primero sobre una copia; no ejecutarlo sobre la base personal sin autorización explícita):
+
+1. Crear y verificar el backup con `backend/backup_db.py`.
+2. Reconciliar el sello con las dos cabezas de rama: `alembic stamp 0006_home_widget_grid 0008_mind_canvas_history`.
+3. Ejecutar `alembic upgrade head`; solo deben ejecutarse `0009` y `0010`.
+4. Verificar `alembic_version = 0010_repair_mind_canvas_schema`, `PRAGMA integrity_check`, `PRAGMA foreign_key_check`, conteos y una operación de Canvas (historial y edge).
+
+No ejecutar `alembic upgrade head` directamente sobre una base así: `0006_home_widget_grid` intenta agregar `column_span`/`row_span`, que ya existen, y falla antes de llegar a `0010`.
+
+**Drift residual aceptado (Scope A):** la base reparada conserva columnas legacy en `mind_canvas_nodes` (`style_json`, `suggested_links`, `node_type`, `config_json`, `extracted_tasks`, `ai_summary`) y la tabla `mind_canvas_frame_members`. Por eso `alembic check` sobre esa base sigue detectando `remove_column`/`remove_table`; es un drift conocido hasta una migración aprobada de reconstrucción de nodos. No afecta la operación actual: las columnas legacy son nullable o tienen default, y las inserciones de Cards siguen funcionando. No eliminar esas columnas ni esa tabla sin migración, pruebas y autorización.
 
 ## 11. Ubicación de la base
 
@@ -495,6 +529,8 @@ La aplicación crea el directorio si no existe e informa errores de permisos o e
 23. Historial: acción grupal atómica, undo/redo con `expected_action_id`, reintentos idempotentes, recorte a 100 acciones y rechazo de snapshots inválidos sin cambios parciales.
 24. Eliminar una Note purga también el historial de Canvases que solo la mencionan en snapshots históricos.
 25. Importación JSON atómica e idempotente, incluidos `mind_canvas_history`, IDs, secuencias, estados y snapshots.
+26. Reparación `0010`: una base sellada en `0008` con esquema previo converge a `0010`, preserva filas y datos, crea el índice de nodos y aborta sin DDL ante datos ambiguos.
+27. Backup `backup_db.py`: incluye transacciones confirmadas del WAL, verifica integridad/FKs/conteos/versión y rechaza destinos inseguros o existentes.
 
 ## 13. Decisiones cerradas y límites
 

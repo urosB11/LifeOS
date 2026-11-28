@@ -243,3 +243,58 @@ autorice la estrategia antes de cualquier merge a Evolution.
 - `MIND-001`: REVIEW (roadmap 0.2 consolidado).
 - `MIND-002`: **REVIEW** — este handoff.
 - `MIND-003` en adelante: PLANNING; requieren SPEC y aceptación del PO.
+
+## Reparación de esquema Mind `0010` (2026-11-27)
+
+**Estado:** REVIEW local, sin commit ni push (instrucción expresa del PO). **Base real no modificada.**
+
+### Problema
+
+La base personal estaba sellada en `0008_mind_canvas_history`, pero su estructura física era anterior al merge `64a3ba4` (los IDs de revisión se reutilizaron). Síntomas reproducidos:
+
+- `OperationalError: no such column: mind_canvas_history.sequence`;
+- `IntegrityError: NOT NULL constraint failed: mind_canvas_edges.edge_type`;
+- `mind_canvas_nodes` sin el índice único `uq_mind_canvas_nodes_canvas_id_id`.
+
+`alembic upgrade head` directo fallaba en `0006_home_widget_grid` porque `column_span`/`row_span` ya existían.
+
+### Alcance ejecutado (Scope A)
+
+| Archivo | Cambio |
+|---|---|
+| `backend/migrations/versions/0010_repair_mind_canvas_schema.py` | Repara `mind_canvas_history`, `mind_canvas_edges` y el índice único de nodos. Inspecciona y valida antes de cualquier DDL; aborta ante datos ambiguos. `downgrade()` es no-op documentado. |
+| `backend/backup_db.py` | Backup con `sqlite3.Connection.backup` (incluye WAL confirmado), verificación de integridad/FKs/conteos/versión y SHA-256. Rechaza destinos dentro del repo, existentes o iguales al origen. |
+| `backend/verify_migrations.py` | HEAD `0010`; escenarios de preservación, abortos, idempotencia, multi-stamp híbrido y backup WAL. |
+| `DATABASE.md` | Sección 10.1 con procedimiento, rollback por backup y drift residual. |
+
+No se reconstruyó `mind_canvas_nodes` ni se eliminó `mind_canvas_frame_members`. No se modificaron las migraciones `0006`–`0009`.
+
+### Verificación ejecutada
+
+| Verificación | Comando | Resultado |
+|---|---|---|
+| Tests backend | `python -m pytest -q` (con `LIFEOS_ALLOWED_HOSTS=127.0.0.1:8000,localhost:8000`) | **186 passed** |
+| Ruff de archivos nuevos/modificados | `python -m ruff check backup_db.py verify_migrations.py migrations/versions/0010_repair_mind_canvas_schema.py` | **All checks passed** |
+| Suite de migraciones | `python verify_migrations.py` | **Todas las verificaciones pasaron** (incluye multi-stamp híbrido y backup WAL) |
+| `alembic check` en base temporal limpia | `alembic check` | **No new upgrade operations detected** |
+
+**Ruff global:** `ruff check .` sigue reportando 44 avisos preexistentes en archivos no tocados por esta reparación (migraciones `0001`–`0009`, `app/api/v1/mind.py`, `app/modules/mind/*`, tests). No se corrigieron para no ampliar el alcance ni modificar migraciones prohibidas.
+
+### Ensayo sobre copia aislada de la base real
+
+Procedimiento ejecutado en `%TEMP%`, nunca sobre `%LOCALAPPDATA%\LifeOS\lifeos.db`:
+
+1. `backup_db.py` creó y verificó una copia (20 tablas, 107 filas, `integrity_check=ok`, 0 violaciones FK, versión `0008`).
+2. `alembic stamp 0006_home_widget_grid 0008_mind_canvas_history`.
+3. `alembic upgrade head`: solo ejecutó `0009_merge_evolution_mind` y `0010_repair_mind_canvas_schema`.
+4. Verificación pre/post: mismas tablas y conteos, datos idénticos en todas las tablas no reconstruidas, history/edges vacíos, columnas/índices/FKs/CHECKs finales, `integrity_check=ok`, `foreign_key_check=0`, `alembic_version=0010`.
+5. Smoke HTTP con `TestClient` sobre la copia: Spaces, Canvases y Nodes existentes; `GET /history` sin error; creación de Space/Canvas/Cards/Edge; undo/redo; movimiento espacial persistido; export JSON con tablas Mind.
+
+**Drift residual esperado:** `alembic check` sobre la copia reparada sigue detectando las columnas legacy de `mind_canvas_nodes` y la tabla `mind_canvas_frame_members`. Es Scope A; requiere una migración posterior aprobada.
+
+### Pendiente
+
+- **Aplicación a la base real:** requiere autorización explícita del PO. No se ejecutó `stamp`, `upgrade` ni ninguna escritura sobre la base personal.
+- **Commit y push:** pendientes por instrucción expresa; el trabajo está solo en el árbol local de `product/mind-core`.
+- **Revisión independiente:** no disponible; la verificación anterior es QA propia.
+- QA visual manual de Canvas: no repetida en esta reparación; el smoke HTTP cubre el comportamiento funcional.
